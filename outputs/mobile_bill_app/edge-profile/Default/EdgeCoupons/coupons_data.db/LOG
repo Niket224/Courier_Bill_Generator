@@ -1,0 +1,5 @@
+2026/06/28-15:30:24.608 1c24 Creating DB C:\Users\niket\OneDrive\Documents\excel_mod 2\outputs\mobile_bill_app\edge-profile\Default\EdgeCoupons/coupons_data.db since it was missing.
+2026/06/28-15:30:24.636 1c24 Reusing MANIFEST C:\Users\niket\OneDrive\Documents\excel_mod 2\outputs\mobile_bill_app\edge-profile\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/06/28-15:30:25.083 42fc Level-0 table #5: started
+2026/06/28-15:30:25.091 42fc Level-0 table #5: 682783 bytes OK
+2026/06/28-15:30:25.094 42fc Delete type=0 #3

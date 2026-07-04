@@ -1,0 +1,582 @@
+const STORAGE_KEY = "courier-bill-app-v2";
+
+const defaultState = {
+  bill: {
+    businessName: "GEETA SWARUP ENTERPRISES",
+    courierBrand: "JETLINE COURIERS PVT LTD",
+    businessAddress: "B GROUND FLOOR ADHARSHILA COMPLEX SOUTH GANDHI MAIDAN, PATNA",
+    mobileNo: "8709210300",
+    sacCode: "996812",
+    billTo: "M/S BANDHAN BANK LTD",
+    billAddress: "ASHOK RAJ PATH, PATNA",
+    gstNo: "",
+    branchCode: "PATN",
+    shipperCode: "BANDAN (A)",
+    invoiceNo: "2516/2025",
+    invoiceDate: "2025-07-01",
+    periodStart: "2025-07-01",
+    periodEnd: "2025-07-31",
+    fuelPct: 20,
+    cgstPct: 9,
+    sgstPct: 9,
+  },
+  rates: [
+    { id: cryptoId(), client: "BANDAN (A)", destination: "PATNA", baseKg: 3, baseRate: 45, perKgRate: 15 },
+    { id: cryptoId(), client: "BANDAN (A)", destination: "BIHAR", baseKg: 3, baseRate: 45, perKgRate: 15 },
+    { id: cryptoId(), client: "BANDAN (A)", destination: "DHANBAD", baseKg: 3, baseRate: 60, perKgRate: 20 },
+    { id: cryptoId(), client: "BANDAN (A)", destination: "DARBHANGA", baseKg: 3, baseRate: 50, perKgRate: 18 },
+  ],
+  shipments: [
+    { id: cryptoId(), cno: "13595898", date: "2025-07-11", destination: "PATNA", type: "D", pcs: 1, weight: 0.1, manualAmount: "" },
+    { id: cryptoId(), cno: "13595899", date: "2025-07-11", destination: "PATNA", type: "D", pcs: 1, weight: 0.1, manualAmount: "" },
+    { id: cryptoId(), cno: "13595900", date: "2025-07-11", destination: "PATNA", type: "D", pcs: 1, weight: 0.1, manualAmount: "" },
+    { id: cryptoId(), cno: "13603768", date: "2025-07-17", destination: "DHANBAD", type: "D", pcs: 1, weight: 0.1, manualAmount: "" },
+    { id: cryptoId(), cno: "13635933", date: "2025-07-31", destination: "DARBHANGA", type: "D", pcs: 1, weight: 0.1, manualAmount: "" },
+  ],
+};
+
+let state = loadState();
+let deferredInstallPrompt = null;
+
+const billFields = [
+  "businessName",
+  "courierBrand",
+  "businessAddress",
+  "mobileNo",
+  "sacCode",
+  "billTo",
+  "billAddress",
+  "gstNo",
+  "branchCode",
+  "shipperCode",
+  "invoiceNo",
+  "invoiceDate",
+  "periodStart",
+  "periodEnd",
+  "fuelPct",
+  "cgstPct",
+  "sgstPct",
+];
+
+function cryptoId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function loadState() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return structuredClone(defaultState);
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      ...structuredClone(defaultState),
+      ...parsed,
+      bill: { ...defaultState.bill, ...parsed.bill },
+      rates: Array.isArray(parsed.rates) ? parsed.rates : structuredClone(defaultState.rates),
+      shipments: Array.isArray(parsed.shipments) ? parsed.shipments : structuredClone(defaultState.shipments),
+    };
+  } catch {
+    return structuredClone(defaultState);
+  }
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function money(value) {
+  return `Rs ${Number(value || 0).toFixed(2)}`;
+}
+
+function plainMoney(value) {
+  return Number(value || 0).toFixed(2);
+}
+
+function asNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function normalize(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+function formatDate(value) {
+  if (!value) return "";
+  const [year, month, day] = value.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function getRate(client, destination) {
+  const targetClient = normalize(client);
+  const targetDestination = normalize(destination);
+  return state.rates.find(
+    (rate) => normalize(rate.client) === targetClient && normalize(rate.destination) === targetDestination,
+  );
+}
+
+function calculateShipment(shipment) {
+  const manual = Number(shipment.manualAmount);
+  if (Number.isFinite(manual) && String(shipment.manualAmount).trim() !== "") {
+    return { amount: manual, status: "manual" };
+  }
+
+  const rate = getRate(state.bill.shipperCode, shipment.destination);
+  if (!rate) return { amount: 0, status: "missing" };
+
+  const weight = asNumber(shipment.weight);
+  const pcs = asNumber(shipment.pcs, 1);
+  const baseKg = asNumber(rate.baseKg);
+  const baseRate = asNumber(rate.baseRate);
+  const perKgRate = asNumber(rate.perKgRate);
+  const extraWeight = Math.max(0, weight - baseKg);
+  const amount = round2((baseRate + extraWeight * perKgRate) * pcs);
+  return { amount, status: "ok" };
+}
+
+function round2(value) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function totals() {
+  const gross = round2(
+    state.shipments.reduce((sum, shipment) => {
+      if (!shipment.cno && !shipment.destination) return sum;
+      return sum + calculateShipment(shipment).amount;
+    }, 0),
+  );
+  const fuel = round2(gross * (asNumber(state.bill.fuelPct) / 100));
+  const subtotal = round2(gross + fuel);
+  const cgst = round2(subtotal * (asNumber(state.bill.cgstPct) / 100));
+  const sgst = round2(subtotal * (asNumber(state.bill.sgstPct) / 100));
+  const final = round2(subtotal + cgst + sgst);
+  return { gross, fuel, subtotal, cgst, sgst, final };
+}
+
+function numberToWordsIndian(value) {
+  const ones = ["", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "ELEVEN", "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN", "SIXTEEN", "SEVENTEEN", "EIGHTEEN", "NINETEEN"];
+  const tens = ["", "", "TWENTY", "THIRTY", "FORTY", "FIFTY", "SIXTY", "SEVENTY", "EIGHTY", "NINETY"];
+  const twoDigits = (number) => {
+    if (number < 20) return ones[number];
+    return `${tens[Math.floor(number / 10)]} ${ones[number % 10]}`.trim();
+  };
+  const threeDigits = (number) => {
+    const hundred = Math.floor(number / 100);
+    const rest = number % 100;
+    return `${hundred ? `${ones[hundred]} HUNDRED` : ""} ${rest ? twoDigits(rest) : ""}`.trim();
+  };
+
+  let number = Math.floor(Math.abs(value));
+  if (number === 0) return "ZERO";
+
+  const crore = Math.floor(number / 10000000);
+  number %= 10000000;
+  const lakh = Math.floor(number / 100000);
+  number %= 100000;
+  const thousand = Math.floor(number / 1000);
+  number %= 1000;
+
+  return [
+    crore ? `${twoDigits(crore)} CRORE` : "",
+    lakh ? `${twoDigits(lakh)} LAKH` : "",
+    thousand ? `${twoDigits(thousand)} THOUSAND` : "",
+    number ? threeDigits(number) : "",
+  ].filter(Boolean).join(" ");
+}
+
+function bindBillForm() {
+  billFields.forEach((field) => {
+    const input = document.getElementById(field);
+    input.value = state.bill[field] ?? "";
+    input.addEventListener("input", () => {
+      state.bill[field] = input.value;
+      saveState();
+      if (field === "shipperCode") renderShipments();
+      renderAll();
+    });
+  });
+}
+
+function renderShipperOptions() {
+  const select = document.getElementById("shipperCode");
+  const clients = Array.from(new Set(state.rates.map((rate) => rate.client).filter(Boolean)));
+  const current = state.bill.shipperCode;
+  if (current && !clients.includes(current)) clients.unshift(current);
+  select.innerHTML = clients.map((client) => `<option value="${escapeHtml(client)}">${escapeHtml(client)}</option>`).join("");
+  select.value = current;
+}
+
+function renderRates() {
+  renderShipperOptions();
+  const list = document.getElementById("rateList");
+  list.innerHTML = state.rates.map((rate, index) => `
+    <article class="rate-card" data-id="${rate.id}">
+      <div class="card-head">
+        <div>
+          <div class="card-title">Rate ${index + 1}</div>
+          <div class="card-subtitle">${escapeHtml(rate.client || "Client")} - ${escapeHtml(rate.destination || "Destination")}</div>
+        </div>
+        <button class="delete-button" type="button" data-action="delete-rate" aria-label="Delete rate">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M9 7V5h6v2m-7 3v8m4-8v8m4-8v8M8 7l1 14h6l1-14" /></svg>
+        </button>
+      </div>
+      <div class="mini-grid">
+        ${rateInput(rate.id, "client", "Client / Shipper", rate.client)}
+        ${rateInput(rate.id, "destination", "Destination", rate.destination)}
+        ${rateInput(rate.id, "baseKg", "Base KG", rate.baseKg, "number", "decimal")}
+        ${rateInput(rate.id, "baseRate", "Base Rate", rate.baseRate, "number", "decimal")}
+        ${rateInput(rate.id, "perKgRate", "Per-KG Above", rate.perKgRate, "number", "decimal")}
+      </div>
+    </article>
+  `).join("");
+}
+
+function rateInput(id, field, label, value, type = "text", inputmode = "text") {
+  return `
+    <label>
+      ${label}
+      <input data-id="${id}" data-field="${field}" data-kind="rate" type="${type}" inputmode="${inputmode}" value="${escapeHtml(value ?? "")}" />
+    </label>
+  `;
+}
+
+function renderShipments() {
+  const list = document.getElementById("shipmentList");
+  list.innerHTML = state.shipments.map((shipment, index) => {
+    const result = calculateShipment(shipment);
+    return `
+      <article class="shipment-card" data-id="${shipment.id}">
+        <div class="card-head">
+          <div>
+            <div class="card-title">Shipment ${index + 1}</div>
+            <div class="card-subtitle">${escapeHtml(shipment.destination || "No destination")} - ${escapeHtml(formatDate(shipment.date))}</div>
+          </div>
+          <div class="amount-pill ${result.status === "missing" ? "error" : ""}">
+            ${result.status === "missing" ? "CHECK RATE" : money(result.amount)}
+          </div>
+          <button class="delete-button" type="button" data-action="delete-shipment" aria-label="Delete shipment">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M9 7V5h6v2m-7 3v8m4-8v8m4-8v8M8 7l1 14h6l1-14" /></svg>
+          </button>
+        </div>
+        <div class="mini-grid">
+          ${shipmentInput(shipment.id, "cno", "C/NO", shipment.cno)}
+          ${shipmentInput(shipment.id, "date", "Date", shipment.date, "date")}
+          ${shipmentDestinationInput(shipment)}
+          ${shipmentInput(shipment.id, "type", "Type", shipment.type)}
+          ${shipmentInput(shipment.id, "pcs", "PCS", shipment.pcs, "number", "numeric")}
+          ${shipmentInput(shipment.id, "weight", "WT (KG)", shipment.weight, "number", "decimal")}
+          ${shipmentInput(shipment.id, "manualAmount", "Manual Amount", shipment.manualAmount, "number", "decimal")}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function shipmentInput(id, field, label, value, type = "text", inputmode = "text") {
+  return `
+    <label>
+      ${label}
+      <input data-id="${id}" data-field="${field}" data-kind="shipment" type="${type}" inputmode="${inputmode}" value="${escapeHtml(value ?? "")}" />
+    </label>
+  `;
+}
+
+function shipmentDestinationInput(shipment) {
+  const destinations = Array.from(new Set(state.rates.map((rate) => rate.destination).filter(Boolean)));
+  if (shipment.destination && !destinations.includes(shipment.destination)) destinations.unshift(shipment.destination);
+  return `
+    <label>
+      Destination
+      <select data-id="${shipment.id}" data-field="destination" data-kind="shipment">
+        ${destinations.map((destination) => `<option value="${escapeHtml(destination)}" ${destination === shipment.destination ? "selected" : ""}>${escapeHtml(destination)}</option>`).join("")}
+      </select>
+    </label>
+  `;
+}
+
+function renderSummary() {
+  const total = totals();
+  document.getElementById("summaryGross").textContent = money(total.gross);
+  document.getElementById("summarySubtotal").textContent = money(total.subtotal);
+  document.getElementById("summaryFinal").textContent = money(total.final);
+}
+
+function renderInvoice() {
+  const total = totals();
+  const rows = state.shipments
+    .filter((shipment) => shipment.cno || shipment.destination)
+    .map((shipment, index) => {
+      const result = calculateShipment(shipment);
+      return `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${escapeHtml(shipment.cno)}</td>
+          <td>${formatDate(shipment.date)}</td>
+          <td>${escapeHtml(shipment.destination)}</td>
+          <td>${escapeHtml(shipment.type || "D")}</td>
+          <td>${escapeHtml(shipment.pcs || 1)}</td>
+          <td>${asNumber(shipment.weight).toFixed(3)}</td>
+          <td>${result.status === "missing" ? "CHECK RATE" : plainMoney(result.amount)}</td>
+        </tr>
+      `;
+    }).join("");
+
+  document.getElementById("invoicePaper").innerHTML = `
+    <div class="invoice-header">
+      <h2>${escapeHtml(state.bill.businessName)}</h2>
+      <h3>${escapeHtml(state.bill.courierBrand)}</h3>
+      <p>${escapeHtml(state.bill.businessAddress)}</p>
+      <p>MOB NO : ${escapeHtml(state.bill.mobileNo)} &nbsp; SAC CODE : ${escapeHtml(state.bill.sacCode)}</p>
+    </div>
+    <div class="invoice-meta">
+      <div>
+        <div>${escapeHtml(state.bill.billTo)}</div>
+        <div>${escapeHtml(state.bill.billAddress)}</div>
+        <div>GST NO : ${escapeHtml(state.bill.gstNo)}</div>
+        <div>PAGE: 1</div>
+      </div>
+      <div>
+        <div>INVOICE DATE: ${formatDate(state.bill.invoiceDate)}</div>
+        <div>BRANCH CODE : ${escapeHtml(state.bill.branchCode)}</div>
+        <div>SHIPPER CODE: ${escapeHtml(state.bill.shipperCode)}</div>
+        <div>INVOICE #: ${escapeHtml(state.bill.invoiceNo)}</div>
+        <div>PERIOD : ${formatDate(state.bill.periodStart)} TO ${formatDate(state.bill.periodEnd)}</div>
+      </div>
+    </div>
+    <table class="invoice-table">
+      <thead>
+        <tr>
+          <th>S.NO</th>
+          <th>C/NO</th>
+          <th>DATE</th>
+          <th>DEST</th>
+          <th>TYPE</th>
+          <th>PCS</th>
+          <th>WT (KG)</th>
+          <th>AMOUNT</th>
+        </tr>
+      </thead>
+      <tbody>${rows || `<tr><td colspan="8">No shipments added</td></tr>`}</tbody>
+    </table>
+    <div class="totals-wrap">
+      <table class="totals-table">
+        <tr><td>G TOTAL: RS</td><td>${plainMoney(total.gross)}</td></tr>
+        <tr><td>Fuel charge @ ${plainMoney(state.bill.fuelPct)}%</td><td>${plainMoney(total.fuel)}</td></tr>
+        <tr><td>SUB TOTAL</td><td>${plainMoney(total.subtotal)}</td></tr>
+        <tr><td>CGST @ ${plainMoney(state.bill.cgstPct)}%</td><td>${plainMoney(total.cgst)}</td></tr>
+        <tr><td>SGST @ ${plainMoney(state.bill.sgstPct)}%</td><td>${plainMoney(total.sgst)}</td></tr>
+        <tr><td>BILL AMOUNT</td><td>${plainMoney(total.final)}</td></tr>
+      </table>
+    </div>
+    <div class="amount-words">RUPEES: ${numberToWordsIndian(total.final)} ONLY</div>
+    <div>E.&amp; O.E.</div>
+    <div class="signature">FOR ${escapeHtml(state.bill.businessName)}</div>
+  `;
+}
+
+function renderAll() {
+  renderSummary();
+  renderInvoice();
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function addRate() {
+  state.rates.push({ id: cryptoId(), client: state.bill.shipperCode || "", destination: "", baseKg: 3, baseRate: 0, perKgRate: 0 });
+  saveState();
+  renderRates();
+  renderShipments();
+  renderAll();
+}
+
+function addShipment() {
+  const firstDestination = state.rates.find((rate) => normalize(rate.client) === normalize(state.bill.shipperCode))?.destination || "";
+  state.shipments.push({ id: cryptoId(), cno: "", date: state.bill.invoiceDate, destination: firstDestination, type: "D", pcs: 1, weight: 0.1, manualAmount: "" });
+  saveState();
+  renderShipments();
+  renderAll();
+}
+
+function newBill() {
+  if (!confirm("Sirf shipment rows clear hongi. Rates safe rahenge. Continue?")) return;
+  state.shipments = [];
+  saveState();
+  renderShipments();
+  renderAll();
+}
+
+function updateShipmentCard(shipment) {
+  const card = document.querySelector(`.shipment-card[data-id="${shipment.id}"]`);
+  if (!card) return;
+  const result = calculateShipment(shipment);
+  const amount = card.querySelector(".amount-pill");
+  const subtitle = card.querySelector(".card-subtitle");
+  if (amount) {
+    amount.classList.toggle("error", result.status === "missing");
+    amount.textContent = result.status === "missing" ? "CHECK RATE" : money(result.amount);
+  }
+  if (subtitle) {
+    subtitle.textContent = `${shipment.destination || "No destination"} - ${formatDate(shipment.date)}`;
+  }
+}
+
+function updateAllShipmentCards() {
+  state.shipments.forEach(updateShipmentCard);
+}
+
+function handleLiveInput(event) {
+  const target = event.target;
+  const id = target.dataset.id;
+  const field = target.dataset.field;
+  const kind = target.dataset.kind;
+  if (!id || !field || !kind) return;
+
+  const collection = kind === "rate" ? state.rates : state.shipments;
+  const item = collection.find((entry) => entry.id === id);
+  if (!item) return;
+
+  item[field] = target.value;
+  saveState();
+  if (kind === "rate") {
+    updateAllShipmentCards();
+  } else {
+    updateShipmentCard(item);
+  }
+  renderAll();
+}
+
+function handleCommittedChange(event) {
+  handleLiveInput(event);
+  const kind = event.target.dataset.kind;
+  if (kind === "rate") {
+    renderRates();
+    renderShipments();
+  }
+  if (kind === "shipment") {
+    renderShipments();
+  }
+  renderAll();
+}
+
+function handleDelete(event) {
+  const button = event.target.closest("button[data-action]");
+  if (!button) return;
+  const card = button.closest("[data-id]");
+  const id = card?.dataset.id;
+  if (!id) return;
+
+  if (button.dataset.action === "delete-rate") {
+    state.rates = state.rates.filter((rate) => rate.id !== id);
+    renderRates();
+    renderShipments();
+  }
+  if (button.dataset.action === "delete-shipment") {
+    state.shipments = state.shipments.filter((shipment) => shipment.id !== id);
+    renderShipments();
+  }
+  saveState();
+  renderAll();
+}
+
+function switchScreen(target) {
+  document.querySelectorAll(".screen").forEach((screen) => {
+    screen.classList.toggle("active", screen.dataset.screen === target);
+  });
+  document.querySelectorAll(".nav-item").forEach((item) => {
+    item.classList.toggle("active", item.dataset.target === target);
+  });
+  if (target === "invoice") renderInvoice();
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `courier-bill-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const imported = JSON.parse(String(reader.result));
+      state = {
+        ...structuredClone(defaultState),
+        ...imported,
+        bill: { ...defaultState.bill, ...imported.bill },
+      };
+      saveState();
+      init(false);
+    } catch {
+      alert("Backup file read nahi ho paayi.");
+    }
+  };
+  reader.readAsText(file);
+}
+
+function setupInstallPrompt() {
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+    document.getElementById("installButton").hidden = false;
+  });
+
+  document.getElementById("installButton").addEventListener("click", async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    document.getElementById("installButton").hidden = true;
+  });
+}
+
+function registerServiceWorker() {
+  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+}
+
+function init(bind = true) {
+  renderShipperOptions();
+  billFields.forEach((field) => {
+    const input = document.getElementById(field);
+    input.value = state.bill[field] ?? "";
+  });
+  renderRates();
+  renderShipments();
+  renderAll();
+
+  if (!bind) return;
+  bindBillForm();
+  document.getElementById("rateList").addEventListener("input", handleLiveInput);
+  document.getElementById("shipmentList").addEventListener("input", handleLiveInput);
+  document.getElementById("rateList").addEventListener("change", handleCommittedChange);
+  document.getElementById("shipmentList").addEventListener("change", handleCommittedChange);
+  document.getElementById("rateList").addEventListener("click", handleDelete);
+  document.getElementById("shipmentList").addEventListener("click", handleDelete);
+  document.getElementById("addRateButton").addEventListener("click", addRate);
+  document.getElementById("addShipmentButton").addEventListener("click", addShipment);
+  document.getElementById("newBillButton").addEventListener("click", newBill);
+  document.getElementById("printButton").addEventListener("click", () => window.print());
+  document.getElementById("exportButton").addEventListener("click", exportData);
+  document.getElementById("importInput").addEventListener("change", (event) => {
+    const file = event.target.files?.[0];
+    if (file) importData(file);
+  });
+  document.querySelectorAll(".nav-item").forEach((button) => {
+    button.addEventListener("click", () => switchScreen(button.dataset.target));
+  });
+  setupInstallPrompt();
+  registerServiceWorker();
+}
+
+init();

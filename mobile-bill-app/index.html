@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#12343b" />
+    <title>Courier Bill App</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css?v=4" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Geeta Swarup Enterprises</p>
+          <h1>Courier Bill App</h1>
+        </div>
+        <button class="icon-button" id="installButton" hidden aria-label="Install app">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" />
+          </svg>
+        </button>
+      </header>
+
+      <main>
+        <section class="summary-strip" aria-label="Bill summary">
+          <div>
+            <span>G Total</span>
+            <strong id="summaryGross">Rs 0.00</strong>
+          </div>
+          <div>
+            <span>Sub Total</span>
+            <strong id="summarySubtotal">Rs 0.00</strong>
+          </div>
+          <div>
+            <span>Bill Amount</span>
+            <strong id="summaryFinal">Rs 0.00</strong>
+          </div>
+        </section>
+
+        <div class="warning-banner" id="warningBanner" hidden role="status"></div>
+
+        <section class="screen active" id="screen-entry" data-screen="entry">
+          <div class="screen-title">
+            <div>
+              <h2>Bill Entry</h2>
+              <p>Neeche C/NO daalo aur Add dabao — amount khud calculate hoga.</p>
+            </div>
+            <button class="secondary-button" id="newBillButton" type="button">New Bill</button>
+          </div>
+
+          <details class="panel bill-details">
+            <summary>Bill Details <span class="hint">(invoice, client, tax %)</span></summary>
+            <form class="form-grid" id="billForm">
+              <label>
+                Business Name
+                <input id="businessName" autocomplete="organization" />
+              </label>
+              <label>
+                Courier Brand
+                <input id="courierBrand" />
+              </label>
+              <label class="span-2">
+                Business Address
+                <textarea id="businessAddress" rows="2"></textarea>
+              </label>
+              <label>
+                Mobile No.
+                <input id="mobileNo" inputmode="tel" />
+              </label>
+              <label>
+                SAC Code
+                <input id="sacCode" />
+              </label>
+              <label class="span-2">
+                Bill To
+                <input id="billTo" />
+              </label>
+              <label class="span-2">
+                Bill Address
+                <textarea id="billAddress" rows="2"></textarea>
+              </label>
+              <label>
+                GST No.
+                <input id="gstNo" />
+              </label>
+              <label>
+                Branch Code
+                <input id="branchCode" />
+              </label>
+              <label>
+                Shipper Code
+                <select id="shipperCode"></select>
+              </label>
+              <label>
+                Invoice No.
+                <input id="invoiceNo" />
+              </label>
+              <label>
+                Invoice Date
+                <input id="invoiceDate" type="date" />
+              </label>
+              <label>
+                Period Start
+                <input id="periodStart" type="date" />
+              </label>
+              <label>
+                Period End
+                <input id="periodEnd" type="date" />
+              </label>
+              <label>
+                Fuel %
+                <input id="fuelPct" type="number" inputmode="decimal" min="0" step="0.01" />
+              </label>
+              <label>
+                CGST %
+                <input id="cgstPct" type="number" inputmode="decimal" min="0" step="0.01" />
+              </label>
+              <label>
+                SGST %
+                <input id="sgstPct" type="number" inputmode="decimal" min="0" step="0.01" />
+              </label>
+            </form>
+          </details>
+
+          <div class="panel quick-add" id="shipmentQuickAdd">
+            <div class="quick-add-head">
+              <h3>Quick Add Shipment</h3>
+              <span class="badge" id="shipmentCount">0 rows</span>
+            </div>
+            <div class="quick-add-grid">
+              <label class="quick-field span-2">
+                C/NO
+                <input id="quickCno" inputmode="numeric" placeholder="13595898" autocomplete="off" />
+              </label>
+              <label class="quick-field">
+                Date
+                <input id="quickDate" type="date" />
+              </label>
+              <label class="quick-field">
+                Destination
+                <select id="quickDestination"></select>
+              </label>
+              <label class="quick-field">
+                Weight (KG)
+                <input id="quickWeight" type="number" inputmode="decimal" step="0.001" value="0.1" />
+              </label>
+              <label class="quick-field">
+                PCS
+                <input id="quickPcs" type="number" inputmode="numeric" value="1" min="1" />
+              </label>
+            </div>
+            <div class="quick-actions">
+              <button class="primary-button" id="quickAddShipmentButton" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                Add Shipment
+              </button>
+              <button class="ghost-button" id="addShipmentButton" type="button">Blank row</button>
+            </div>
+          </div>
+
+          <div class="entry-table-wrap" id="shipmentList"></div>
+
+          <details class="panel bulk-panel">
+            <summary>Bulk paste (Excel se copy)</summary>
+            <p class="bulk-help">Har line ek shipment. Columns: C/NO, Date, Destination, Type, PCS, Weight</p>
+            <textarea id="bulkImportInput" rows="4" placeholder="13595898, 11/07/2025, PATNA, D, 1, 0.1"></textarea>
+            <button class="secondary-button" id="bulkImportButton" type="button">Import Rows</button>
+          </details>
+        </section>
+
+        <section class="screen" id="screen-rates" data-screen="rates">
+          <div class="screen-title">
+            <div>
+              <h2>Rate Chart</h2>
+              <p>Destination + rate daalo — ek baar set, har bill mein use hoga.</p>
+            </div>
+          </div>
+
+          <div class="panel quick-add" id="rateQuickAdd">
+            <div class="quick-add-head">
+              <h3>Quick Add Rate</h3>
+              <span class="badge" id="rateCount">0 rates</span>
+            </div>
+            <p class="quick-note">Client: <strong id="rateClientLabel">—</strong> (Entry tab se shipper code change hota hai)</p>
+            <div class="quick-add-grid">
+              <label class="quick-field span-2">
+                Destination
+                <input id="quickRateDestination" placeholder="PATNA, DHANBAD..." autocomplete="off" />
+              </label>
+              <label class="quick-field">
+                Base KG
+                <input id="quickBaseKg" type="number" inputmode="decimal" value="3" step="0.1" />
+              </label>
+              <label class="quick-field">
+                Base Rate (Rs)
+                <input id="quickBaseRate" type="number" inputmode="decimal" placeholder="45" />
+              </label>
+              <label class="quick-field">
+                Per KG Above (Rs)
+                <input id="quickPerKgRate" type="number" inputmode="decimal" placeholder="15" />
+              </label>
+            </div>
+            <div class="quick-actions">
+              <button class="primary-button" id="quickAddRateButton" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                Add Rate
+              </button>
+              <button class="ghost-button" id="addRateButton" type="button">Blank row</button>
+            </div>
+          </div>
+
+          <div class="rate-help">
+            <strong>Formula:</strong> Base Rate + MAX(0, Weight − Base KG) × Per-KG Rate × PCS
+          </div>
+
+          <div class="entry-table-wrap" id="rateList"></div>
+        </section>
+
+        <section class="screen" id="screen-invoice" data-screen="invoice">
+          <div class="screen-title">
+            <div>
+              <h2>Invoice</h2>
+              <p>Final bill yahan ready hai. Print se PDF bhi ban sakta hai.</p>
+            </div>
+            <button class="primary-button" id="printButton" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z" />
+              </svg>
+              Print
+            </button>
+          </div>
+
+          <article class="invoice-paper" id="invoicePaper"></article>
+        </section>
+
+        <section class="screen" id="screen-tools" data-screen="tools">
+          <div class="screen-title">
+            <div>
+              <h2>Tools</h2>
+              <p>Backup, restore, aur quick help.</p>
+            </div>
+          </div>
+
+          <div class="tool-card">
+            <h3>Backup Data</h3>
+            <p>Phone change karne se pehle backup file download kar lo.</p>
+            <button class="secondary-button" id="exportButton" type="button">Download Backup</button>
+          </div>
+
+          <div class="tool-card">
+            <h3>Restore Data</h3>
+            <p>Pehle se download ki hui backup file select karo.</p>
+            <input id="importInput" type="file" accept="application/json" />
+          </div>
+
+          <div class="tool-card">
+            <h3>Easy Rule</h3>
+            <p>Rates ek baar maintain karo. Har bill ke time bas shipment rows add karo. Invoice apne aap banega.</p>
+          </div>
+
+          <div class="tool-card">
+            <h3>Quick Steps</h3>
+            <ol class="help-steps">
+              <li>Rates tab → destination + rate add karo (Quick Add use karo).</li>
+              <li>Entry tab → C/NO + weight daalo, Add Shipment dabao.</li>
+              <li>Invoice tab se print / PDF lo.</li>
+              <li>Next month ke liye "New Bill" dabao.</li>
+            </ol>
+          </div>
+        </section>
+      </main>
+
+      <div class="toast" id="toast" hidden role="status"></div>
+
+      <nav class="bottom-nav" aria-label="App navigation">
+        <button class="nav-item active" data-target="entry" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h10" /></svg>
+          Entry
+        </button>
+        <button class="nav-item" data-target="rates" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M7 4v6M10 14h10M13 11v6M4 19h16" /></svg>
+          Rates
+        </button>
+        <button class="nav-item" data-target="invoice" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10l3 3v15H7zM17 3v4h4M10 12h8M10 16h8" /></svg>
+          Invoice
+        </button>
+        <button class="nav-item" data-target="tools" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M5 8h14M7 16h10" /></svg>
+          Tools
+        </button>
+      </nav>
+    </div>
+
+    <script src="app.js?v=4" defer></script>
+  </body>
+</html>
