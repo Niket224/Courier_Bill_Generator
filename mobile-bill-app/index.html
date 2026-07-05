@@ -121,6 +121,24 @@
                 SGST %
                 <input id="sgstPct" type="number" inputmode="decimal" min="0" step="0.01" />
               </label>
+              <div class="span-2 form-upload-row">
+                <label class="upload-field">
+                  Company Logo
+                  <div class="upload-controls">
+                    <input type="file" id="logoUpload" accept="image/*" />
+                    <button type="button" class="ghost-button btn-xs" id="removeLogo" style="display:none;">Remove</button>
+                  </div>
+                  <img id="logoPreview" class="upload-preview" alt="Logo Preview" style="display:none;" />
+                </label>
+                <label class="upload-field">
+                  Owner Signature
+                  <div class="upload-controls">
+                    <input type="file" id="signatureUpload" accept="image/*" />
+                    <button type="button" class="ghost-button btn-xs" id="removeSignature" style="display:none;">Remove</button>
+                  </div>
+                  <img id="signaturePreview" class="upload-preview" alt="Signature Preview" style="display:none;" />
+                </label>
+              </div>
             </form>
           </details>
 

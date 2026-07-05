@@ -19,6 +19,8 @@ const defaultState = {
     fuelPct: 20,
     cgstPct: 9,
     sgstPct: 9,
+    logoSrc: "",
+    signatureSrc: "",
   },
   rates: [
     { id: cryptoId(), client: "BANDAN (A)", destination: "PATNA", baseKg: 3, baseRate: 45, perKgRate: 15 },
@@ -431,12 +433,19 @@ function renderInvoice() {
       `;
     }).join("");
 
+  const logoHtml = state.bill.logoSrc 
+    ? `<img src="${state.bill.logoSrc}" class="invoice-logo" alt="Logo" />` 
+    : "";
+
   document.getElementById("invoicePaper").innerHTML = `
-    <div class="invoice-header">
-      <h2>${escapeHtml(state.bill.businessName)}</h2>
-      <h3>${escapeHtml(state.bill.courierBrand)}</h3>
-      <p>${escapeHtml(state.bill.businessAddress)}</p>
-      <p>MOB NO : ${escapeHtml(state.bill.mobileNo)} &nbsp; SAC CODE : ${escapeHtml(state.bill.sacCode)}</p>
+    <div class="invoice-header ${state.bill.logoSrc ? 'has-logo' : ''}">
+      ${logoHtml}
+      <div class="invoice-header-text">
+        <h2>${escapeHtml(state.bill.businessName)}</h2>
+        <h3>${escapeHtml(state.bill.courierBrand)}</h3>
+        <p>${escapeHtml(state.bill.businessAddress)}</p>
+        <p>MOB NO : ${escapeHtml(state.bill.mobileNo)} &nbsp; SAC CODE : ${escapeHtml(state.bill.sacCode)}</p>
+      </div>
     </div>
     <div class="invoice-meta">
       <div>
@@ -479,8 +488,18 @@ function renderInvoice() {
       </table>
     </div>
     <div class="amount-words">RUPEES: ${numberToWordsIndian(total.final)} ONLY</div>
-    <div>E.&amp; O.E.</div>
-    <div class="signature">FOR ${escapeHtml(state.bill.businessName)}</div>
+    <div class="invoice-bottom-row">
+      <div class="e-oe">E.&amp; O.E.</div>
+      <div class="signature-block">
+        <div class="signature-for">FOR ${escapeHtml(state.bill.businessName)}</div>
+        <div class="signature-image-wrap">
+          ${state.bill.signatureSrc 
+            ? `<img src="${state.bill.signatureSrc}" class="invoice-signature-img" alt="Signature" />` 
+            : `<div class="signature-placeholder"></div>`}
+        </div>
+        <div class="signature-title">PROPRIETOR / AUTHORISED SIGNATORY</div>
+      </div>
+    </div>
   `;
 }
 
@@ -926,11 +945,65 @@ function init(bind = true) {
   renderRates();
   renderShipments();
   renderAll();
+  updateImageUploadsUI();
 
   if (!bind) return;
   bindBillForm();
   bindEntryTables();
   bindQuickAdd();
+
+  // Image uploads handling
+  const logoUpload = document.getElementById("logoUpload");
+  const signatureUpload = document.getElementById("signatureUpload");
+  const removeLogoBtn = document.getElementById("removeLogo");
+  const removeSignatureBtn = document.getElementById("removeSignature");
+
+  const handleImageUpload = (file, callback) => {
+    const reader = new FileReader();
+    reader.onload = (e) => callback(e.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  logoUpload?.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleImageUpload(file, (base64) => {
+        state.bill.logoSrc = base64;
+        saveState();
+        updateImageUploadsUI();
+        renderAll();
+      });
+    }
+  });
+
+  signatureUpload?.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleImageUpload(file, (base64) => {
+        state.bill.signatureSrc = base64;
+        saveState();
+        updateImageUploadsUI();
+        renderAll();
+      });
+    }
+  });
+
+  removeLogoBtn?.addEventListener("click", () => {
+    state.bill.logoSrc = "";
+    if (logoUpload) logoUpload.value = "";
+    saveState();
+    updateImageUploadsUI();
+    renderAll();
+  });
+
+  removeSignatureBtn?.addEventListener("click", () => {
+    state.bill.signatureSrc = "";
+    if (signatureUpload) signatureUpload.value = "";
+    saveState();
+    updateImageUploadsUI();
+    renderAll();
+  });
+
   document.getElementById("addRateButton").addEventListener("click", addRate);
   document.getElementById("addShipmentButton").addEventListener("click", addShipment);
   document.getElementById("newBillButton").addEventListener("click", newBill);
@@ -952,6 +1025,40 @@ function init(bind = true) {
 
   if (!state.shipments.length) {
     document.getElementById("quickCno")?.focus();
+  }
+}
+
+function updateImageUploadsUI() {
+  const logoPreview = document.getElementById("logoPreview");
+  const removeLogoBtn = document.getElementById("removeLogo");
+  const logoUpload = document.getElementById("logoUpload");
+  
+  const hasLogo = !!state.bill.logoSrc;
+  if (logoPreview) {
+    logoPreview.src = state.bill.logoSrc || "";
+    logoPreview.style.display = hasLogo ? "block" : "none";
+  }
+  if (removeLogoBtn) {
+    removeLogoBtn.style.display = hasLogo ? "inline-flex" : "none";
+  }
+  if (!hasLogo && logoUpload) {
+    logoUpload.value = "";
+  }
+
+  const signaturePreview = document.getElementById("signaturePreview");
+  const removeSignatureBtn = document.getElementById("removeSignature");
+  const signatureUpload = document.getElementById("signatureUpload");
+  
+  const hasSig = !!state.bill.signatureSrc;
+  if (signaturePreview) {
+    signaturePreview.src = state.bill.signatureSrc || "";
+    signaturePreview.style.display = hasSig ? "block" : "none";
+  }
+  if (removeSignatureBtn) {
+    removeSignatureBtn.style.display = hasSig ? "inline-flex" : "none";
+  }
+  if (!hasSig && signatureUpload) {
+    signatureUpload.value = "";
   }
 }
 
