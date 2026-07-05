@@ -350,7 +350,7 @@ function renderShipments() {
       : `<option value="">No rate</option>`;
 
     return `
-      <tr data-id="${shipment.id}" class="${result.status === "missing" ? "row-error" : ""}">
+      <tr data-id="${shipment.id}" class="shipment-card ${result.status === "missing" ? "row-error" : ""}">
         <td class="col-num">${index + 1}</td>
         <td><input class="cell-input" data-id="${shipment.id}" data-field="cno" data-kind="shipment" value="${escapeHtml(shipment.cno ?? "")}" placeholder="C/NO" inputmode="numeric" /></td>
         <td><input class="cell-input" data-id="${shipment.id}" data-field="date" data-kind="shipment" type="date" value="${escapeHtml(shipment.date ?? "")}" /></td>
@@ -358,7 +358,11 @@ function renderShipments() {
         <td><input class="cell-input cell-sm" data-id="${shipment.id}" data-field="type" data-kind="shipment" value="${escapeHtml(shipment.type || "D")}" /></td>
         <td><input class="cell-input cell-num" data-id="${shipment.id}" data-field="pcs" data-kind="shipment" type="number" inputmode="numeric" value="${escapeHtml(shipment.pcs ?? 1)}" /></td>
         <td><input class="cell-input cell-num" data-id="${shipment.id}" data-field="weight" data-kind="shipment" type="number" inputmode="decimal" step="0.001" value="${escapeHtml(shipment.weight ?? "")}" /></td>
-        <td class="col-amount ${result.status === "missing" ? "error" : ""}">${result.status === "missing" ? "!" : plainMoney(result.amount)}</td>
+        <td class="col-amount">
+          <span class="amount-pill ${result.status === "missing" ? "error" : ""}">
+            ${result.status === "missing" ? "CHECK RATE" : money(result.amount)}
+          </span>
+        </td>
         <td class="col-action">
           <button class="icon-btn" type="button" data-action="duplicate-shipment" aria-label="Duplicate" title="Copy row">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8V5a2 2 0 0 1 2-2h9v13h-3M6 21H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2" /></svg>
@@ -717,10 +721,10 @@ function updateShipmentRow(shipment) {
   const row = document.querySelector(`#shipmentList tr[data-id="${shipment.id}"]`);
   if (!row) return;
   const result = calculateShipment(shipment);
-  const amountCell = row.querySelector(".col-amount");
-  if (amountCell) {
-    amountCell.classList.toggle("error", result.status === "missing");
-    amountCell.textContent = result.status === "missing" ? "!" : plainMoney(result.amount);
+  const pill = row.querySelector(".amount-pill");
+  if (pill) {
+    pill.classList.toggle("error", result.status === "missing");
+    pill.textContent = result.status === "missing" ? "CHECK RATE" : money(result.amount);
   }
   row.classList.toggle("row-error", result.status === "missing");
 }
