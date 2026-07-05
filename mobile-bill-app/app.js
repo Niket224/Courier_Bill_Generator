@@ -19,7 +19,7 @@ const defaultState = {
     fuelPct: 20,
     cgstPct: 9,
     sgstPct: 9,
-    logoSrc: "",
+    logoSrc: "assets/logo.png",
     signatureSrc: "",
   },
   rates: [
@@ -77,11 +77,21 @@ function mergeImportedState(imported) {
 
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return structuredClone(defaultState);
+  if (!raw) {
+    const fresh = structuredClone(defaultState);
+    fresh.bill.logoSrc = "assets/logo.png";
+    return fresh;
+  }
   try {
-    return mergeImportedState(JSON.parse(raw));
+    const loaded = mergeImportedState(JSON.parse(raw));
+    if (loaded.bill.logoSrc === "" || loaded.bill.logoSrc === undefined) {
+      loaded.bill.logoSrc = "assets/logo.png";
+    }
+    return loaded;
   } catch {
-    return structuredClone(defaultState);
+    const fresh = structuredClone(defaultState);
+    fresh.bill.logoSrc = "assets/logo.png";
+    return fresh;
   }
 }
 
@@ -433,12 +443,12 @@ function renderInvoice() {
       `;
     }).join("");
 
-  const logoHtml = state.bill.logoSrc 
+  const logoHtml = (state.bill.logoSrc && state.bill.logoSrc !== "none") 
     ? `<img src="${state.bill.logoSrc}" class="invoice-logo" alt="Logo" />` 
     : "";
 
   document.getElementById("invoicePaper").innerHTML = `
-    <div class="invoice-header ${state.bill.logoSrc ? 'has-logo' : ''}">
+    <div class="invoice-header ${state.bill.logoSrc && state.bill.logoSrc !== 'none' ? 'has-logo' : ''}">
       ${logoHtml}
       <div class="invoice-header-text">
         <h2>${escapeHtml(state.bill.businessName)}</h2>
@@ -989,7 +999,7 @@ function init(bind = true) {
   });
 
   removeLogoBtn?.addEventListener("click", () => {
-    state.bill.logoSrc = "";
+    state.bill.logoSrc = "none";
     if (logoUpload) logoUpload.value = "";
     saveState();
     updateImageUploadsUI();
@@ -1033,9 +1043,9 @@ function updateImageUploadsUI() {
   const removeLogoBtn = document.getElementById("removeLogo");
   const logoUpload = document.getElementById("logoUpload");
   
-  const hasLogo = !!state.bill.logoSrc;
+  const hasLogo = state.bill.logoSrc && state.bill.logoSrc !== "none";
   if (logoPreview) {
-    logoPreview.src = state.bill.logoSrc || "";
+    logoPreview.src = hasLogo ? state.bill.logoSrc : "";
     logoPreview.style.display = hasLogo ? "block" : "none";
   }
   if (removeLogoBtn) {
