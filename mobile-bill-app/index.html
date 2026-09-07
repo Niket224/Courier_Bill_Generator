@@ -7,7 +7,7 @@
     <title>Courier Bill App</title>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=4" />
+    <link rel="stylesheet" href="styles.css?v=5" />
   </head>
   <body>
     <div class="app-shell">
@@ -196,6 +196,29 @@
             </div>
           </div>
 
+          <div class="panel ai-upload-panel">
+            <div class="quick-add-head">
+              <h3>AI Rate Card PDF Parser</h3>
+              <span class="badge badge-ai">Gemini AI</span>
+            </div>
+            <p class="quick-note">Rate quotation PDF upload karo — Gemini AI rates aur rules extract karke review modal mein dikhayega.</p>
+            <div class="ai-upload-controls">
+              <input type="file" id="pdfRateUpload" accept="application/pdf" style="display:none;" />
+              <button class="secondary-button" id="triggerPdfUploadButton" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                Select Rate Card PDF
+              </button>
+              <span id="pdfFileNameDisplay" class="file-name-display">No file chosen</span>
+              <button class="primary-button" id="parsePdfButton" type="button" disabled>
+                Upload &amp; Extract Rates
+              </button>
+            </div>
+            <div class="ai-loading" id="aiLoadingSpinner" hidden>
+              <div class="spinner"></div>
+              <span>Gemini AI PDF analyze kar raha hai... Extracted rates review modal mein khulenge.</span>
+            </div>
+          </div>
+
           <div class="panel quick-add" id="rateQuickAdd">
             <div class="quick-add-head">
               <h3>Quick Add Rate</h3>
@@ -253,6 +276,42 @@
           <article class="invoice-paper" id="invoicePaper"></article>
         </section>
 
+        <section class="screen" id="screen-history" data-screen="history">
+          <div class="screen-title">
+            <div>
+              <h2>Past Invoices</h2>
+              <p>MongoDB Atlas mein saved pichle bills search aur view karo.</p>
+            </div>
+            <button class="secondary-button" id="refreshInvoicesButton" type="button">Refresh</button>
+          </div>
+
+          <div class="panel history-search-panel">
+            <div class="history-search-grid">
+              <label class="span-2">
+                Search Term
+                <input id="historySearchInput" placeholder="Search by C/NO, Shipper Code, or Invoice No..." />
+              </label>
+              <label>
+                Start Date
+                <input id="historyStartDate" type="date" />
+              </label>
+              <label>
+                End Date
+                <input id="historyEndDate" type="date" />
+              </label>
+            </div>
+            <div class="quick-actions">
+              <button class="primary-button" id="executeSearchButton" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z"/></svg>
+                Search Invoices
+              </button>
+              <button class="ghost-button" id="clearSearchButton" type="button">Reset Filters</button>
+            </div>
+          </div>
+
+          <div class="history-list" id="historyInvoiceList"></div>
+        </section>
+
         <section class="screen" id="screen-tools" data-screen="tools">
           <div class="screen-title">
             <div>
@@ -305,6 +364,10 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10l3 3v15H7zM17 3v4h4M10 12h8M10 16h8" /></svg>
           Invoice
         </button>
+        <button class="nav-item" data-target="history" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" /></svg>
+          History
+        </button>
         <button class="nav-item" data-target="tools" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M5 8h14M7 16h10" /></svg>
           Tools
@@ -312,6 +375,66 @@
       </nav>
     </div>
 
-    <script src="app.js?v=4" defer></script>
+    <!-- Editable PDF Review Modal -->
+    <div class="modal-overlay hidden" id="pdfReviewModal" hidden style="display: none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div>
+            <h3>Review Extracted Rates &amp; Client Rules</h3>
+            <p class="modal-sub">Gemini AI extracted the following details. Edit any values before saving to Database.</p>
+          </div>
+          <button class="close-button modal-close" id="closeReviewModal" type="button" aria-label="Close modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="review-info-grid">
+            <label>
+              Client Name
+              <input id="reviewClientName" placeholder="Client Name" />
+            </label>
+            <label>
+              Quotation Date
+              <input id="reviewQuotationDate" placeholder="YYYY-MM-DD" />
+            </label>
+            <label class="span-2">
+              Client Address
+              <input id="reviewClientAddress" placeholder="Client Address" />
+            </label>
+            <label>
+              Min Charge Weight (KG)
+              <input id="reviewMinWeightKg" type="number" step="0.1" placeholder="e.g. 2" />
+            </label>
+            <label>
+              Fuel Surcharge (%)
+              <input id="reviewFuelSurchargePct" type="number" step="0.01" placeholder="e.g. 15" />
+            </label>
+          </div>
+
+          <div class="modal-table-wrap">
+            <table class="modal-table">
+              <thead>
+                <tr>
+                  <th>Target Name</th>
+                  <th>Target Type</th>
+                  <th>Base KG</th>
+                  <th>Per KG Rate (Rs)</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="reviewRatesTableBody"></tbody>
+            </table>
+          </div>
+          <button class="ghost-button btn-sm" id="addReviewRowButton" type="button" style="margin-top:10px;">+ Add Custom Row</button>
+        </div>
+        <div class="modal-footer">
+          <button class="secondary-button modal-close" id="cancelReviewModal" type="button">Cancel</button>
+          <button class="primary-button" id="saveReviewedRatesButton" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Verify &amp; Save Rates
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js?v=5" defer></script>
   </body>
 </html>

@@ -158,6 +158,7 @@ try {
 
   console.log(JSON.stringify(checks, null, 2));
 } finally {
-  ws.close();
-  edge.kill();
+  try { ws.close(); } catch {}
+  try { edge.kill(); } catch {}
+  process.exit(0);
 }

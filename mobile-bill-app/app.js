@@ -443,8 +443,8 @@ function renderInvoice() {
       `;
     }).join("");
 
-  const logoHtml = (state.bill.logoSrc && state.bill.logoSrc !== "none") 
-    ? `<img src="${state.bill.logoSrc}" class="invoice-logo" alt="Logo" />` 
+  const logoHtml = (state.bill.logoSrc && state.bill.logoSrc !== "none")
+    ? `<img src="${state.bill.logoSrc}" class="invoice-logo" alt="Logo" />`
     : "";
 
   document.getElementById("invoicePaper").innerHTML = `
@@ -503,9 +503,9 @@ function renderInvoice() {
       <div class="signature-block">
         <div class="signature-for">FOR ${escapeHtml(state.bill.businessName)}</div>
         <div class="signature-image-wrap">
-          ${state.bill.signatureSrc 
-            ? `<img src="${state.bill.signatureSrc}" class="invoice-signature-img" alt="Signature" />` 
-            : `<div class="signature-placeholder"></div>`}
+          ${state.bill.signatureSrc
+      ? `<img src="${state.bill.signatureSrc}" class="invoice-signature-img" alt="Signature" />`
+      : `<div class="signature-placeholder"></div>`}
         </div>
         <div class="signature-title">PROPRIETOR / AUTHORISED SIGNATORY</div>
       </div>
@@ -898,7 +898,7 @@ function setupInstallPrompt() {
 
 function registerServiceWorker() {
   if ("serviceWorker" in navigator && location.protocol !== "file:") {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
+    navigator.serviceWorker.register("sw.js").catch(() => { });
   }
 }
 
@@ -1042,7 +1042,7 @@ function updateImageUploadsUI() {
   const logoPreview = document.getElementById("logoPreview");
   const removeLogoBtn = document.getElementById("removeLogo");
   const logoUpload = document.getElementById("logoUpload");
-  
+
   const hasLogo = state.bill.logoSrc && state.bill.logoSrc !== "none";
   if (logoPreview) {
     logoPreview.src = hasLogo ? state.bill.logoSrc : "";
@@ -1058,7 +1058,7 @@ function updateImageUploadsUI() {
   const signaturePreview = document.getElementById("signaturePreview");
   const removeSignatureBtn = document.getElementById("removeSignature");
   const signatureUpload = document.getElementById("signatureUpload");
-  
+
   const hasSig = !!state.bill.signatureSrc;
   if (signaturePreview) {
     signaturePreview.src = state.bill.signatureSrc || "";
@@ -1072,4 +1072,326 @@ function updateImageUploadsUI() {
   }
 }
 
+/* ==========================================================================
+   Backend API Integration & AI PDF Parser Handlers
+   ========================================================================== */
+
+const API_BASE = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+  ? "http://localhost:5000/api"
+  : "/api";
+
+function setupAiPdfParser() {
+  const triggerBtn = document.getElementById("triggerPdfUploadButton");
+  const fileInput = document.getElementById("pdfRateUpload");
+  const fileNameDisplay = document.getElementById("pdfFileNameDisplay");
+  const parseBtn = document.getElementById("parsePdfButton");
+  const spinner = document.getElementById("aiLoadingSpinner");
+
+  triggerBtn?.addEventListener("click", () => fileInput?.click());
+
+  fileInput?.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (fileNameDisplay) fileNameDisplay.textContent = file.name;
+      if (parseBtn) parseBtn.disabled = false;
+    } else {
+      if (fileNameDisplay) fileNameDisplay.textContent = "No file chosen";
+      if (parseBtn) parseBtn.disabled = true;
+    }
+  });
+
+  parseBtn?.addEventListener("click", async () => {
+    const file = fileInput?.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("pdf", file);
+
+    if (spinner) spinner.hidden = false;
+    if (parseBtn) parseBtn.disabled = true;
+
+    try {
+      const response = await fetch(`${API_BASE}/rates/parse-pdf`, {
+        method: "POST",
+        body: formData
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Failed to parse PDF rate card");
+      }
+
+      openReviewModal(result.data);
+      showToast("PDF parsed successfully by Gemini AI!");
+    } catch (error) {
+      console.error("AI PDF Parse Error:", error);
+      showToast(`AI Parsing Error: ${error.message}`);
+    } finally {
+      if (spinner) spinner.hidden = true;
+      if (parseBtn) parseBtn.disabled = false;
+    }
+  });
+
+  document.getElementById("closeReviewModal")?.addEventListener("click", closeReviewModal);
+  document.getElementById("cancelReviewModal")?.addEventListener("click", closeReviewModal);
+  document.getElementById("addReviewRowButton")?.addEventListener("click", addReviewRow);
+  document.getElementById("saveReviewedRatesButton")?.addEventListener("click", saveReviewedRates);
+
+  // Close modal when clicking the dark backdrop (outside the card)
+  document.getElementById("pdfReviewModal")?.addEventListener("click", (e) => {
+    if (e.target.id === "pdfReviewModal") closeReviewModal();
+  });
+}
+
+function openReviewModal(data) {
+  const modal = document.getElementById("pdfReviewModal");
+  if (!modal) return;
+
+  document.getElementById("reviewClientName").value = data.clientInfo?.clientName || state.bill.shipperCode || "";
+  document.getElementById("reviewQuotationDate").value = data.clientInfo?.quotationDate || "";
+  document.getElementById("reviewClientAddress").value = data.clientInfo?.address || "";
+  document.getElementById("reviewMinWeightKg").value = data.globalRules?.minWeightKg ?? "";
+  document.getElementById("reviewFuelSurchargePct").value = data.globalRules?.fuelSurchargePct ?? "";
+
+  renderReviewModalTable(data.rates || []);
+
+  // Show modal — clear all three hiding mechanisms
+  modal.hidden = false;
+  modal.classList.remove("hidden");
+  modal.style.display = "";
+}
+
+function closeReviewModal() {
+  const modal = document.getElementById("pdfReviewModal");
+  if (!modal) return;
+  modal.hidden = true;
+  modal.classList.add("hidden");
+  modal.style.display = "none";
+}
+
+function renderReviewModalTable(rates) {
+  const tbody = document.getElementById("reviewRatesTableBody");
+  if (!tbody) return;
+
+  tbody.innerHTML = rates.map((r, idx) => `
+    <tr data-idx="${idx}">
+      <td><input class="review-target-name" value="${escapeHtml(r.targetName)}" placeholder="e.g. patna, bihar" /></td>
+      <td>
+        <select class="review-target-type">
+          <option value="CITY" ${r.targetType === "CITY" ? "selected" : ""}>CITY</option>
+          <option value="STATE" ${r.targetType === "STATE" ? "selected" : ""}>STATE</option>
+          <option value="CUSTOM_ZONE" ${r.targetType === "CUSTOM_ZONE" ? "selected" : ""}>CUSTOM_ZONE</option>
+          <option value="REGION" ${r.targetType === "REGION" ? "selected" : ""}>REGION</option>
+          <option value="DEFAULT" ${r.targetType === "DEFAULT" ? "selected" : ""}>DEFAULT</option>
+        </select>
+      </td>
+      <td><input type="number" class="review-base-kg" value="${r.baseKg ?? 1}" step="0.1" /></td>
+      <td><input type="number" class="review-per-kg" value="${r.perKgRate ?? 0}" step="0.1" /></td>
+      <td>
+        <button type="button" class="icon-btn delete" onclick="this.closest('tr').remove()">&times;</button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function addReviewRow() {
+  const tbody = document.getElementById("reviewRatesTableBody");
+  if (!tbody) return;
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><input class="review-target-name" placeholder="Target Name" /></td>
+    <td>
+      <select class="review-target-type">
+        <option value="CITY">CITY</option>
+        <option value="STATE">STATE</option>
+        <option value="CUSTOM_ZONE">CUSTOM_ZONE</option>
+        <option value="REGION">REGION</option>
+        <option value="DEFAULT">DEFAULT</option>
+      </select>
+    </td>
+    <td><input type="number" class="review-base-kg" value="1" step="0.1" /></td>
+    <td><input type="number" class="review-per-kg" value="0" step="0.1" /></td>
+    <td>
+      <button type="button" class="icon-btn delete" onclick="this.closest('tr').remove()">&times;</button>
+    </td>
+  `;
+  tbody.appendChild(tr);
+}
+
+async function saveReviewedRates() {
+  const shipperCode = document.getElementById("reviewClientName").value.trim().toUpperCase() || state.bill.shipperCode || "DEFAULT";
+  const rows = document.querySelectorAll("#reviewRatesTableBody tr");
+
+  const ratesToSave = [];
+  rows.forEach((tr) => {
+    const targetName = tr.querySelector(".review-target-name")?.value.trim().toLowerCase();
+    const targetType = tr.querySelector(".review-target-type")?.value;
+    const baseKg = Number(tr.querySelector(".review-base-kg")?.value || 1);
+    const perKgRate = Number(tr.querySelector(".review-per-kg")?.value || 0);
+
+    if (targetName && !isNaN(perKgRate)) {
+      ratesToSave.push({ shipperCode, targetName, targetType, baseKg, perKgRate });
+    }
+  });
+
+  if (!ratesToSave.length) {
+    showToast("Kam se kam ek valid rate row add karo");
+    return;
+  }
+
+  let savedCount = 0;
+  for (const r of ratesToSave) {
+    try {
+      const res = await fetch(`${API_BASE}/rates`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(r)
+      });
+      if (res.ok) savedCount++;
+    } catch (err) {
+      console.warn("Backend rate save error (using local storage fallback):", err);
+    }
+
+    const existingIdx = state.rates.findIndex(
+      (ex) => normalize(ex.client) === normalize(r.shipperCode) && normalize(ex.destination) === normalize(r.targetName)
+    );
+    if (existingIdx >= 0) {
+      state.rates[existingIdx] = {
+        ...state.rates[existingIdx],
+        baseKg: r.baseKg,
+        perKgRate: r.perKgRate,
+        baseRate: r.perKgRate * r.baseKg
+      };
+    } else {
+      state.rates.push({
+        id: cryptoId(),
+        client: r.shipperCode,
+        destination: r.targetName.toUpperCase(),
+        baseKg: r.baseKg,
+        baseRate: r.perKgRate * r.baseKg,
+        perKgRate: r.perKgRate
+      });
+    }
+  }
+
+  saveState();
+  renderRates();
+  renderShipments();
+  renderAll();
+  closeReviewModal();
+  showToast(`${savedCount || ratesToSave.length} rates saved successfully!`);
+}
+
+function setupHistoryTab() {
+  document.getElementById("executeSearchButton")?.addEventListener("click", fetchPastInvoices);
+  document.getElementById("refreshInvoicesButton")?.addEventListener("click", fetchPastInvoices);
+  document.getElementById("clearSearchButton")?.addEventListener("click", () => {
+    document.getElementById("historySearchInput").value = "";
+    document.getElementById("historyStartDate").value = "";
+    document.getElementById("historyEndDate").value = "";
+    fetchPastInvoices();
+  });
+}
+
+async function fetchPastInvoices() {
+  const listEl = document.getElementById("historyInvoiceList");
+  if (!listEl) return;
+
+  listEl.innerHTML = `<div class="ai-loading"><div class="spinner"></div> Searching invoices from MongoDB Atlas...</div>`;
+
+  const queryTerm = document.getElementById("historySearchInput")?.value.trim() || "";
+  const startDate = document.getElementById("historyStartDate")?.value || "";
+  const endDate = document.getElementById("historyEndDate")?.value || "";
+
+  const params = new URLSearchParams();
+  if (queryTerm) {
+    params.append("q", queryTerm);
+  }
+  if (startDate) params.append("startDate", startDate);
+  if (endDate) params.append("endDate", endDate);
+
+  try {
+    const res = await fetch(`${API_BASE}/invoices/search?${params.toString()}`);
+    if (!res.ok) throw new Error("Failed to fetch past invoices");
+    const json = await res.json();
+    const invoices = json.data || [];
+
+    if (!invoices.length) {
+      listEl.innerHTML = `<div class="empty-state">Koi past invoice nahi mili.</div>`;
+      return;
+    }
+
+    listEl.innerHTML = invoices.map((inv) => `
+      <div class="history-card">
+        <div class="history-card-info">
+          <h4>Invoice #${escapeHtml(inv.invoiceNumber)}</h4>
+          <p>Client: <strong>${escapeHtml(inv.clientName || inv.shipperCode)}</strong> (${escapeHtml(inv.shipperCode)})</p>
+          <p>Date: ${formatDate(inv.invoiceDate ? inv.invoiceDate.slice(0, 10) : "")} | ${inv.shipments?.length || 0} shipments</p>
+        </div>
+        <div class="history-card-amount">
+          <div class="history-amount-text">${money(inv.totalAmount)}</div>
+          <span class="badge-status ${(inv.status || "generated").toLowerCase()}">${escapeHtml(inv.status || "GENERATED")}</span>
+        </div>
+      </div>
+    `).join("");
+  } catch (err) {
+    console.error("Fetch past invoices error:", err);
+    listEl.innerHTML = `<div class="empty-state">Unable to load past invoices. Offline mode active.</div>`;
+  }
+}
+
+async function persistInvoiceToBackend() {
+  try {
+    const validShipments = state.shipments
+      .filter((s) => s.cno && String(s.cno).trim().length > 0)
+      .map((s) => ({
+        awb: String(s.cno).trim(),
+        bookingDate: s.date,
+        destination: s.destination,
+        actualWeight: s.weight,
+        chargedWeight: s.weight,
+        amount: calculateShipment(s).amount
+      }));
+
+    const payload = {
+      invoiceNumber: state.bill.invoiceNo,
+      shipperCode: state.bill.shipperCode,
+      clientName: state.bill.billTo,
+      clientGst: state.bill.gstNo,
+      invoiceDate: state.bill.invoiceDate,
+      shipments: validShipments,
+      subtotal: totals().subtotal,
+      taxRate: asNumber(state.bill.cgstPct) + asNumber(state.bill.sgstPct),
+      taxAmount: totals().cgst + totals().sgst,
+      totalAmount: totals().final,
+      status: "GENERATED"
+    };
+
+    await fetch(`${API_BASE}/invoices/save`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  } catch (err) {
+    console.warn("Could not persist invoice to server (offline):", err);
+  }
+}
+
+// Hook into initial setup & screen switches
+setupAiPdfParser();
+setupHistoryTab();
+
+const originalSwitchScreen = switchScreen;
+switchScreen = function (target) {
+  originalSwitchScreen(target);
+  if (target === "history") fetchPastInvoices();
+};
+
+const originalPrintInvoice = printInvoice;
+printInvoice = function () {
+  persistInvoiceToBackend();
+  originalPrintInvoice();
+};
+
 init();
+

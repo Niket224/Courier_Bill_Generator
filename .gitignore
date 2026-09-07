@@ -1,2 +1,9 @@
-node_modules
+node_modules/
+.env
+.env.*
+!.env.example
+server/.env
+server/.env.*
+!server/.env.example
 outputs/mobile_bill_app/edge-profile/
+.DS_Store
