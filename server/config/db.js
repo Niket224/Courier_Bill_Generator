@@ -14,17 +14,18 @@ const connectDB = async () => {
       throw new Error('MONGO_URI is not defined in environment variables.');
     }
 
-    const conn = await mongoose.connect(connString);
+    const conn = await mongoose.connect(connString, { serverSelectionTimeoutMS: 5000, connectTimeoutMS: 10000, socketTimeoutMS: 30000 });
     await require('../services/businessRecovery').assertRecoveredDatabase(conn.connection.db);
 
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
+    const log = require('../operations').safeLogger();
+    log('database_connected');
 
     mongoose.connection.on('error', (err) => {
-      console.error('MongoDB connection error. Check database availability and credentials.');
+      log('database_error');
     });
 
     mongoose.connection.on('disconnected', () => {
-      console.warn('MongoDB connection disconnected.');
+      log('database_disconnected');
     });
 
     return conn;

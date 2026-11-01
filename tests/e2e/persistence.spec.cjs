@@ -1,5 +1,13 @@
 const { test, expect } = require('@playwright/test');
 const fixture = require('../fixtures/bill.json');
+test('incompatible deployment protocol blocks save confirmation and printing while retaining the draft', async ({ page }) => {
+  await page.route('**/api/invoices/save', route => route.fulfill({ headers: { 'X-Courier-Protocol': 'future-protocol', 'Access-Control-Expose-Headers': 'X-Courier-Protocol' }, json: receipt(route.request().postDataJSON()) }));
+  await open(page); await page.locator('#printButton').click();
+  await expect(page.locator('#invoiceSaveState')).toHaveText('Failed to save');
+  await expect(page.locator('#invoiceSaveMessage')).toContainText('update is incomplete');
+  expect(await page.evaluate(() => window.printCalls || 0)).toBe(0);
+  expect(await page.evaluate(() => !!state.persistence.pending)).toBe(true);
+});
 function receipt(payload) {
   return { success: true, operationVersion: payload.expectedVersion + 1, data: {
     ...payload, _id: 'a'.repeat(24), revision: payload.expectedVersion + 1,

@@ -1,0 +1,12 @@
+
+> courier-bill-generator@1.0.0 check
+> node scripts/check.cjs
+
+Syntax checked 81 JavaScript files; workflow JSON/YAML and safety policy validated. No linter is configured.
+
+> courier-bill-generator@1.0.0 check:secrets
+> node scripts/scan-secrets.cjs
+
+Source secret/private-artifact safety scan passed. Ignored environment files were not read.
+found 0 vulnerabilities
+found 0 vulnerabilities

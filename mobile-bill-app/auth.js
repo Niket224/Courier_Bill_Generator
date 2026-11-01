@@ -37,6 +37,7 @@
   async function apiFetch(url, options = {}) {
     if (!authenticated) { lock(); throw new Error('Please sign in to continue.'); }
     const headers = new Headers(options.headers);
+    headers.set('X-Courier-Protocol', 'courier-api-v1');
     const started = generation;
     if (!['GET', 'HEAD'].includes((options.method || 'GET').toUpperCase())) headers.set('X-CSRF-Token', csrfToken);
     let response;
@@ -47,6 +48,8 @@
       throw error;
     }
     if (started !== generation || !authenticated) throw new Error('Session changed. Sign in again to confirm the saved state.');
+    const protocol = response.headers.get('X-Courier-Protocol');
+    if (protocol && protocol !== 'courier-api-v1') { const error = new Error('Application update is incomplete. Keep your draft and reload after the operator checks deployment.'); error.code = 'CLIENT_VERSION'; throw error; }
     if (response.status === 401) {
       lock('Your session expired. Sign in again; your draft is preserved.');
       throw new Error('Please sign in again.');

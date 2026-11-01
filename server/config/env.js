@@ -34,6 +34,10 @@ function validateEnv(env) {
   }
   if (nodeEnv === 'production' && !allowedOrigins.length) errors.push('ALLOWED_ORIGINS is required in production.');
   let security;
+  const bindHost = env.BIND_HOST || '127.0.0.1';
+  if (!['127.0.0.1', '0.0.0.0'].includes(bindHost)) errors.push('BIND_HOST must be 127.0.0.1 or 0.0.0.0.');
+  const shutdownTimeoutMs = env.SHUTDOWN_TIMEOUT_MS ?? '10000';
+  if (!/^\d+$/.test(shutdownTimeoutMs) || +shutdownTimeoutMs < 1000 || +shutdownTimeoutMs > 30000) errors.push('SHUTDOWN_TIMEOUT_MS must be 1000–30000.');
   const geminiModel = env.GEMINI_MODEL || 'gemini-2.5-flash';
   if (!/^gemini-[a-z0-9][a-z0-9.-]{1,80}$/.test(geminiModel)) errors.push('GEMINI_MODEL must be a documented Gemini model identifier.');
   const geminiTimeoutMs = env.GEMINI_TIMEOUT_MS ?? '8000';
@@ -45,7 +49,7 @@ function validateEnv(env) {
     throw new Error(`Invalid environment configuration:\n- ${errors.join('\n- ')}\nSee .env.example for setup instructions.`);
   }
   return {
-    port, nodeEnv, allowedOrigins, ...security, geminiModel, geminiTimeoutMs: +geminiTimeoutMs, geminiRetries: +geminiRetries,
+    port, nodeEnv, bindHost, shutdownTimeoutMs: +shutdownTimeoutMs, allowedOrigins, ...security, geminiModel, geminiTimeoutMs: +geminiTimeoutMs, geminiRetries: +geminiRetries,
     warnings: !env.GEMINI_API_KEY || !env.GEMINI_API_KEY.trim()
       ? ['GEMINI_API_KEY is missing; PDF rate-card parsing is unavailable. Set it to enable this feature.'] : []
   };

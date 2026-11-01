@@ -33,6 +33,7 @@ test('configured values and dummy credentials do not need network access', () =>
     ...valid,
     MONGO_URI: 'mongodb+srv://dummy:fake@cluster.example.test/bills',
     GEMINI_API_KEY: 'fake-test-key', PORT: '8080', NODE_ENV: 'production',
+    SESSION_SECRET: require('node:crypto').randomBytes(32).toString('base64url'), BROWSER_DRAFT_KEY: require('node:crypto').randomBytes(32).toString('base64'),
     ALLOWED_ORIGINS: ' https://example.test, https://billing.example.test '
   };
   const snapshot = { ...env };

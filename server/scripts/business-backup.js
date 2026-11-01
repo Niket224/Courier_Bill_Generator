@@ -28,7 +28,7 @@ async function main(argv = process.argv.slice(2), env = process.env) {
       const manifest = Archive.open(await fs.readFile(file), key);
       if (command === 'verify') { console.log(JSON.stringify({ status: 'VERIFIED_ARCHIVE', createdAt: manifest.createdAt, counts: manifest.inventory.map(({ name, count }) => ({ name, count })) })); return; }
       Recovery.assertRestoreUri(env.RESTORE_MONGO_URI);
-      client = new MongoClient(env.RESTORE_MONGO_URI, { serverSelectionTimeoutMS: 5000 }); await client.connect();
+      client = new MongoClient(env.RESTORE_MONGO_URI, { serverSelectionTimeoutMS: 5000, socketTimeoutMS: 30000 }); await client.connect();
       console.log(JSON.stringify(await Recovery.restore(client, manifest))); return;
     }
     if (command !== 'create' || flags['authorize-read'] !== 'yes') throw new Error('Backup creation requires create --authorize-read yes and explicit source configuration.');
@@ -36,7 +36,7 @@ async function main(argv = process.argv.slice(2), env = process.env) {
     if (!env.BACKUP_SOURCE_URI || !/^[A-Za-z0-9_-]{1,64}$/.test(env.BACKUP_SOURCE_DB || '')) throw new Error('BACKUP_SOURCE_URI and BACKUP_SOURCE_DB are required; MONGO_URI is never used.');
     const directory = external(flags['out-dir']);
     const realDirectory = await fs.realpath(directory); external(realDirectory);
-    client = new MongoClient(env.BACKUP_SOURCE_URI, { serverSelectionTimeoutMS: 5000 }); await client.connect();
+    client = new MongoClient(env.BACKUP_SOURCE_URI, { serverSelectionTimeoutMS: 5000, socketTimeoutMS: 30000 }); await client.connect();
     const manifest = await Recovery.capture(client, env.BACKUP_SOURCE_DB);
     const bytes = Archive.seal(manifest, key); Archive.open(bytes, key);
     const file = path.join(realDirectory, `courier-business-v1-${new Date().toISOString().replaceAll(':', '-')}-${randomUUID()}.cbackup`);

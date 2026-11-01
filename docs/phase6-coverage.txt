@@ -1,0 +1,281 @@
+
+> courier-bill-generator@1.0.0 test:coverage
+> node scripts/run-tests.mjs coverage
+
+✔ defaults and missing optional Gemini configuration (4.538ms)
+✔ Gemini configuration enforces bounded attempts and model identifier syntax (3.6498ms)
+✔ configured values and dummy credentials do not need network access (2.7252ms)
+✔ required configuration is validated even in test mode (0.5059ms)
+✔ aggregated errors identify variables without exposing supplied values (0.5541ms)
+✔ MongoDB URI requires a scheme and host (0.3849ms)
+✔ ports accept boundaries and reject malformed, blank, and out-of-range values (0.4071ms)
+✔ CORS entries must be origins (0.5233ms)
+✔ blank Gemini key warns without preventing startup (0.2853ms)
+✔ frontend server exits before listening when PORT is invalid (209.1567ms)
+✔ health, missing route, and input validation (1239.2989ms)
+✔ legacy rate reads, fallback priority, minimum weight and rounding (98.3316ms)
+✔ invoice computation, controlled lifecycle, pagination, search and retrieval (93.8656ms)
+✔ successful admin login, session check, fixation prevention and cookie flags (264.9371ms)
+✔ incorrect password and unknown user have the same generic error (568.1282ms)
+✔ missing or malformed login credentials return 400 (58.2384ms)
+✔ invalid session and unsigned cookies return 401 (6.8254ms)
+✔ expired session is rejected before MongoDB TTL cleanup (303.4298ms)
+✔ sessions survive app recreation but credential changes revoke them (259.585ms)
+✔ logout destroys session and old cookies cannot be replayed (290.3544ms)
+✔ unauthenticated GET /api/invoices returns 401 (4.1678ms)
+✔ unauthenticated GET /api/invoices/search returns 401 (2.8336ms)
+✔ unauthenticated GET /api/invoices/TEST-100 returns 401 (3.7016ms)
+✔ unauthenticated POST /api/invoices/save returns 401 (3.5723ms)
+✔ unauthenticated GET /api/rates returns 401 (5.6598ms)
+✔ unauthenticated POST /api/rates returns 401 (3.4507ms)
+✔ unauthenticated POST /api/rates/calculate returns 401 (4.0197ms)
+✔ unauthenticated POST /api/rates/parse-pdf returns 401 (5.7857ms)
+✔ login and private writes require session-bound CSRF tokens (597.8883ms)
+✔ explicit allowed CORS origin supports credentialed preflight (4.4898ms)
+✔ disallowed origins including arbitrary Vercel domains and null are rejected (7.3383ms)
+✔ authentication rate limit blocks repeated attempts (24.8265ms)
+✔ PDF upload is authenticated, CSRF protected and rate limited without Gemini calls (345.2049ms)
+✔ malformed and oversized JSON return safe errors (16.9005ms)
+{"time":"2026-11-01T14:28:29.052Z","event":"request","requestId":"f46dd398-a4ec-47f5-beef-28d95706400d","area":"auth","method":"GET","status":200,"durationMs":3}
+✔ security headers, no-store, and production Secure cookies (13.4815ms)
+✔ production API errors do not leak secrets or stack traces (328.1223ms)
+✔ single-account limiter also applies across independent login sessions (25.1734ms)
+✔ password hashing concurrency is bounded for the single operator (373.4177ms)
+✔ upgraded upload middleware rejects excess files and oversized PDF safely (419.3437ms)
+✔ Gemini failures never leak provider credentials or documents (1214.524ms)
+✔ invalid Gemini output is redacted, and synthetic valid PDF extraction still works (976.4725ms)
+✔ session store failures fail closed with a generic API error (293.7828ms)
+✔ identical concurrent saves are idempotent and create exactly one invoice (32.1802ms)
+✔ duplicate invoice numbers and changed idempotency payloads are rejected (46.0702ms)
+✔ draft updates use revisions and conflicting concurrent edits never partially combine (52.4659ms)
+✔ finalized and paid contents are immutable; paid and cancellation actions retain original amounts (107.2944ms)
+✔ corrections link new numbers without mutating original finalized data (39.2364ms)
+✔ legacy historical documents remain readable and cannot be silently adopted or overwritten (22.5239ms)
+✔ invalid fields and failed updates leave invoice data unchanged (74.1717ms)
+✔ complete metadata and shipment snapshot survives persistence without repricing (41.8664ms)
+✔ new lifecycle endpoints retain authentication and CSRF protections (14.8033ms)
+✔ history lists stay lightweight while detail preserves reconstruction data (21.5378ms)
+✔ invoice search rejects malformed filters and treats search input literally (83.5721ms)
+✔ concurrent lifecycle retries append only one audit operation (70.4093ms)
+✔ server independently verifies new final invoices using published base-charge cards (35.7098ms)
+✔ tampered subtotal cannot be finalized (33.296ms)
+✔ tampered taxAmount cannot be finalized (30.6513ms)
+✔ tampered totalAmount cannot be finalized (28.6647ms)
+✔ tampered shipment amount, missing rate and malformed monetary values are rejected (52.53ms)
+✔ calculation endpoint requires authentication/CSRF and returns structured reconciliation (29.8554ms)
+✔ committed replay ignores new rates, edited idempotency payload fails, historical calculation is unchanged (108.425ms)
+✔ IGST, no-tax and explicit manual totals are independently checked (44.4464ms)
+✔ legacy base-charge omission is estimate-only and cannot certify a final invoice (58.9964ms)
+✔ new finalizations cannot rely on legacy implicit claims or default tax assumptions (27.1343ms)
+✔ Phase 2 committed request IDs still replay without financial recertification (25.3726ms)
+✔ new rate-card endpoints require authentication, CSRF and explicit approval (50.8455ms)
+✔ reviewed drafts save and update without changing active or legacy rates (29.1646ms)
+✔ publication is atomic, idempotent and switches all rates together (52.9945ms)
+✔ concurrent publications conflict instead of overwriting a winner (47.9465ms)
+✔ publication database failure leaves the previously approved version unchanged (58.5047ms)
+✔ rollback creates a new approved version without changing historical invoices (114.0561ms)
+✔ draft tampering, stale revisions and cross-shipper identifiers are rejected (50.408ms)
+✔ fake signatures and corrupt PDFs never reach the provider (310.2ms)
+✔ parser timeout, service outage, credentials and quota return safe failures (2683.8473ms)
+✔ missing AI charges are unresolved, malformed fields are rejected, and neither changes rates (937.1869ms)
+✔ only one PDF is admitted while a provider operation is in flight (643.9339ms)
+✔ operational health, private counters and request identifiers expose no customer data (23.5685ms)
+✔ incompatible client protocol rejects writes before persistence and correlation headers are server generated (7.2237ms)
+✔ disconnected isolated database fails safely without buffering a write (352.0511ms)
+✔ consistent backup includes several invoices/clients, shipments and multiple approved rate versions but excludes sessions (1121.5273ms)
+✔ encrypted full restore into a new empty database verifies exact records, indexes, status, tax and correction history (1066.3098ms)
+✔ interrupted backup fails without a completed manifest (6.2882ms)
+✔ failed partial restore is quarantined and startup refuses it (151.9358ms)
+✔ restore rejects changed counts, incompatible schemas and broken invoice/rate references before writing (12.804ms)
+✔ loss of source records can be recovered without recalculating issued invoices (2087.5722ms)
+✔ browser decryption key requires an authenticated session and valid CSRF; backup has no HTTP surface (1237.7261ms)
+✔ 40-version guard preserves all publications, rejects a 41st and cannot delete rollback history (974.0137ms)
+✔ golden shipment: below base (2.3438ms)
+✔ golden shipment: at base (0.2806ms)
+✔ golden shipment: above base (0.1753ms)
+✔ golden shipment: fractional weight (0.1091ms)
+✔ golden shipment: multiple pieces (0.1121ms)
+✔ golden shipment: zero weight base charge (0.0811ms)
+✔ golden shipment: manual total ignores pieces (0.2212ms)
+✔ golden invoice has independently specified gross, fuel, split taxes and words (5.4332ms)
+✔ reject negative weight (6.3629ms)
+✔ reject invalid weight (2.7446ms)
+✔ reject blank weight (0.3023ms)
+✔ reject missing weight (0.1775ms)
+✔ reject NaN (0.1084ms)
+✔ reject Infinity (0.099ms)
+✔ reject zero pieces (0.1345ms)
+✔ reject negative pieces (0.1245ms)
+✔ reject fractional pieces (0.1451ms)
+✔ reject negative override (0.1501ms)
+✔ reject invalid override (0.1054ms)
+✔ reject null weight (0.0824ms)
+✔ reject null pieces (0.0888ms)
+✔ reject sub-paise override (0.1068ms)
+✔ reject excess precision (0.0902ms)
+✔ reject excessive value (0.1609ms)
+✔ missing rate and unknown destination selection cannot produce a normal charge (0.518ms)
+✔ zero base, zero extra rate and zero manual override are permitted (0.2295ms)
+✔ half-up line rounding is exact, with no weight ceiling (0.2603ms)
+✔ zero fuel, fractional fuel and separately rounded taxes (0.3167ms)
+✔ IGST and explicit no-tax mode do not infer legal eligibility (0.4198ms)
+✔ sum of rounded components exactly equals the final paise (0.2043ms)
+✔ Indian words carry paise and handle large crore values (0.2272ms)
+✔ duplicate tracking numbers and workload limit are enforced (0.2905ms)
+✔ 1000 lines, repeated runs and browser-loaded module have exact parity (46.4478ms)
+✔ rate changes cannot mutate an earlier pure result or input (0.4251ms)
+✔ large totals stay exact up to the explicit limit and overflow is rejected (12.5296ms)
+✔ base charge, excess kilograms, pieces, and normalized rate lookup (17.7141ms)
+✔ manual amount and missing-rate status (4.5494ms)
+✔ fuel and split GST are applied to the expected bases (4.3261ms)
+✔ bulk input and invoice numbering (7.2215ms)
+✔ imported image sources and HTML attributes cannot inject executable markup (3.0836ms)
+✔ Phase 2 canonical request hash remains byte-compatible (6.4879ms)
+✔ invoice validator preserves legacy fallback arithmetic without claiming verification (2.3739ms)
+✔ strict invoice field, date, monetary and shipment validation (1.8771ms)
+✔ lifecycle validation requires version, request ID and reason (0.4297ms)
+✔ browser payload preserves full snapshot, pieces, manual amount and selected rate (2.4628ms)
+✔ browser refuses incomplete/invalid invoices before a request (0.9726ms)
+✔ both launchers use an environment that strips credentials and loaders (7.1176ms)
+✔ test database configuration fails closed (0.8027ms)
+✔ only a generated loopback URI is accepted (0.6631ms)
+✔ production connector and entry point refuse test mode before reading dotenv (1110.9898ms)
+✔ structured logs admit only safe fixed metadata and ignore supplied secrets and customer fields (5.0476ms)
+✔ readiness fails on unavailable/hung dependencies and during drain (5.992ms)
+✔ startup failure disconnects and emits no underlying credential-bearing error (1.7491ms)
+✔ graceful shutdown drains a real listener and disconnects exactly once (74.7456ms)
+✔ shutdown force-closes an unfinished request at its deadline (46.1517ms)
+✔ CI policy rejects missing regressions, mutable actions, writes and ignored failures (5.041ms)
+✔ secret scan detects private artifacts and provider credentials without returning their values (0.8146ms)
+✔ backup age and failure assessments never treat absent, future or stale receipts as success (0.2913ms)
+✔ retention is planning-only, preserves known-good backups and refuses a zero-copy policy (0.4536ms)
+✔ backup job verifies independent copy, detects failures/capacity, and preserves last success (62.6629ms)
+✔ monitoring emits safe alerts for unavailable backend and unconfigured backup monitoring (0.7878ms)
+✔ production configuration rejects weak and reused keys and invalid operational settings (4.1866ms)
+✔ service-worker rollout deletes only obsolete app caches and never unrelated origin data (3.4108ms)
+✔ QA wrapper propagates an actual assertion failure as exit 1 (2266.102ms)
+✔ valid extraction and reviewed normalization retain independent base charge (5.0879ms)
+✔ rate schema rejects missing destination (0.969ms)
+✔ rate schema rejects invalid destination type (0.3954ms)
+✔ rate schema rejects missing base rate (0.4055ms)
+✔ rate schema rejects missing extra-weight rate (0.3337ms)
+✔ rate schema rejects negative base charge (0.3027ms)
+✔ rate schema rejects negative per-kg charge (0.2719ms)
+✔ rate schema rejects invalid base weight (0.2165ms)
+✔ rate schema rejects NaN (0.2753ms)
+✔ rate schema rejects Infinity (0.2475ms)
+✔ rate schema rejects duplicate destination (0.3613ms)
+✔ rate schema rejects conflicting duplicate (0.286ms)
+✔ rate schema rejects unsupported formula (0.2669ms)
+✔ rate schema rejects missing surcharge (0.2769ms)
+✔ rate schema rejects invalid surcharge (0.2275ms)
+✔ rate schema rejects incorrect AI field name (0.2232ms)
+✔ rate schema rejects extra fields (0.2352ms)
+✔ rate schema rejects empty rates (0.1983ms)
+✔ rate schema rejects conflicting minimum (0.238ms)
+✔ missing AI prices remain unresolved and never default to zero or weight times rate (0.4517ms)
+✔ duplicate AI rows remain visible for resolution rather than being silently collapsed (0.2835ms)
+✔ explicit zero and decimal charges normalize without rounding or invented charges (0.2739ms)
+✔ malformed JSON, non-object responses and currency strings are rejected (0.495ms)
+✔ PDF signatures, corruption, active content and object streams are rejected (998.6523ms)
+✔ Gemini retries only transient errors and returns validated extraction (14.7466ms)
+✔ Gemini 401 is not retried and never exposes provider text (1.2638ms)
+✔ Gemini 403 is not retried and never exposes provider text (0.3421ms)
+✔ Gemini 429 is not retried and never exposes provider text (0.3055ms)
+✔ Gemini 404 is not retried and never exposes provider text (0.3356ms)
+✔ Gemini 400 is not retried and never exposes provider text (0.2287ms)
+✔ Gemini timeout and malformed output are bounded and safe (12.2553ms)
+✔ backup metadata has explicit format/schema/application version, time, inventory and checksums (6.535ms)
+✔ AES-GCM archive decrypts exactly and random nonces produce different ciphertext (6.2287ms)
+✔ wrong backup key is rejected (1.4569ms)
+✔ missing backup key is rejected (0.2732ms)
+✔ corrupt encrypted archive and authenticated header fail closed (1.6767ms)
+✔ unsupported backup version (0.493ms)
+✔ missing manifest field (0.4733ms)
+✔ checksum mismatch (0.4417ms)
+✔ count mismatch (0.9581ms)
+✔ missing collection (0.4001ms)
+✔ unexpected collection (0.3717ms)
+✔ duplicate inventory (0.2575ms)
+✔ production and malformed restore targets are rejected without connection (0.514ms)
+✔ browser legacy import remains compatible and versioned export contains all private archives (2.7142ms)
+✔ malformed JSON, missing browser fields, unsupported versions and invalid amounts are rejected (0.6872ms)
+✔ prototype pollution and embedded secrets are rejected recursively (0.9188ms)
+✔ unsafe images, malformed dates, and non-finite browser amounts fail import validation (0.8847ms)
+✔ browser draft migration verifies ciphertext before removing originals and recovers after refresh (22.766ms)
+✔ vault lock removes access to private memory and key; ciphertext remains recoverable (2.894ms)
+✔ wrong browser key and corrupt ciphertext preserve encrypted data (2.9142ms)
+✔ quota failure during migration retains plaintext original (1.2375ms)
+✔ quota failure during encrypted save preserves old ciphertext and reports failed flush (2.3613ms)
+✔ different plaintext and ciphertext copies are never silently merged during migration (1.6682ms)
+✔ concurrent browser tabs cannot silently overwrite the winning encrypted draft (2.604ms)
+✔ CLI refuses repository output, absent authorization and unavailable disk (37.1653ms)
+✔ scrypt uses random salts, verifies correct passwords and rejects invalid inputs (1780.3099ms)
+✔ security environment rejects missing and unsafe values without echoing them (1.7204ms)
+✔ production CORS rejects wildcard, absent origins and insecure schemes (1.5721ms)
+✔ service worker never intercepts authenticated API or external responses (2.1362ms)
+✔ app factory fails closed without security configuration or a session store (1241.7136ms)
+✔ credential helper refuses noninteractive input without printing a password (88.33ms)
+ℹ tests 213
+ℹ suites 0
+ℹ pass 213
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 16875.5041
+ℹ start of coverage report
+ℹ ---------------------------------------------------------------------------------------------
+ℹ file                     | line % | branch % | funcs % | uncovered lines
+ℹ ---------------------------------------------------------------------------------------------
+ℹ mobile-bill-app          |        |          |         | 
+ℹ  billing.js              |  99.00 |    91.84 |  100.00 | 4
+ℹ  browser-data.js         |  98.21 |    76.40 |  100.00 | 47
+ℹ  draft-vault.js          | 100.00 |    81.54 |   84.62 | 
+ℹ  rate-card.js            |  98.63 |    78.75 |  100.00 | 4
+ℹ server                   |        |          |         | 
+ℹ  app.js                  | 100.00 |    91.43 |  100.00 | 
+ℹ  config                  |        |          |         | 
+ℹ   db.js                  |  35.14 |    66.67 |   33.33 | 11-34
+ℹ   env.js                 | 100.00 |   100.00 |  100.00 | 
+ℹ   security.js            | 100.00 |    83.87 |  100.00 | 
+ℹ   test-db.js             | 100.00 |   100.00 |  100.00 | 
+ℹ  models                  |        |          |         | 
+ℹ   Client.js              | 100.00 |   100.00 |  100.00 | 
+ℹ   Invoice.js             | 100.00 |   100.00 |  100.00 | 
+ℹ   Rate.js                | 100.00 |   100.00 |  100.00 | 
+ℹ   RateBook.js            | 100.00 |   100.00 |  100.00 | 
+ℹ   RateCardDraft.js       | 100.00 |   100.00 |  100.00 | 
+ℹ   Shipment.js            | 100.00 |   100.00 |  100.00 | 
+ℹ  operations.js           | 100.00 |    95.77 |  100.00 | 
+ℹ  routes                  |        |          |         | 
+ℹ   aiRoutes.js            | 100.00 |    95.45 |   71.43 | 
+ℹ   invoiceRoutes.js       |  87.56 |    82.76 |  100.00 | 30-32 89-90 118-136 187-188 221-222
+ℹ   rateCardRoutes.js      |  95.45 |    92.31 |   77.78 | 16
+ℹ   rateRoutes.js          |  87.16 |    81.03 |  100.00 | 25-29 87-88 104-108 124-128 144-145
+ℹ  runtime.js              |  97.56 |    75.00 |   72.73 | 14
+ℹ  scripts                 |        |          |         | 
+ℹ   business-backup.js     |  66.67 |    56.52 |   50.00 | 27-33 35 37-44
+ℹ   hash-admin-password.js |  22.58 |    75.00 |   66.67 | 6-29
+ℹ   monitor.js             | 100.00 |    80.65 |   33.33 | 
+ℹ  security                |        |          |         | 
+ℹ   auth.js                | 100.00 |    96.00 |  100.00 | 
+ℹ   password.js            | 100.00 |   100.00 |  100.00 | 
+ℹ   store.js               | 100.00 |    75.00 |  100.00 | 
+ℹ  server.js               |  11.11 |    50.00 |    0.00 | 3-18
+ℹ  services                |        |          |         | 
+ℹ   backupArchive.js       | 100.00 |    94.67 |  100.00 | 
+ℹ   backupFile.js          | 100.00 |   100.00 |  100.00 | 
+ℹ   backupOperations.js    | 100.00 |    81.67 |   91.67 | 
+ℹ   billingVerification.js |  93.06 |    87.27 |   90.91 | 11-15
+ℹ   businessRecovery.js    | 100.00 |    78.26 |   90.91 | 
+ℹ   geminiParser.js        |  77.19 |    94.59 |   85.71 | 8-20
+ℹ   invoicePersistence.js  |  93.81 |    88.75 |  100.00 | 36-37 89-91 95
+ℹ   invoiceValidation.js   |  99.18 |    91.04 |  100.00 | 38
+ℹ   pdf-worker.js          | 100.00 |    50.00 |   66.67 | 
+ℹ   pdfValidation.js       |  96.00 |    85.71 |   62.50 | 19
+ℹ   rateCards.js           | 100.00 |    84.54 |  100.00 | 
+ℹ ---------------------------------------------------------------------------------------------
+ℹ all files                |  93.11 |    86.32 |   90.68 | 
+ℹ ---------------------------------------------------------------------------------------------
+ℹ end of coverage report

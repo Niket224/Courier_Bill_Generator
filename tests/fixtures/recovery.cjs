@@ -22,6 +22,7 @@ async function seed() {
   await Shipment.create({ invoiceId: invoices[0]._id, awb: 'RECOVERY-STANDALONE', amount: 45 });
   const changed = cards.card(); changed.rates[0].baseRate = 90; await cards.publishFixture(changed);
   await mongoose.connection.db.collection('sessions').insertOne({ _id: 'synthetic-excluded-session', session: 'not-a-real-session' });
+  await mongoose.connection.db.collection('operator_sessions').insertOne({ _id: 'synthetic-excluded-operator-session', session: 'not-a-real-session', expires: new Date(Date.now() + 600000) });
   return invoices;
 }
 module.exports = { seed };

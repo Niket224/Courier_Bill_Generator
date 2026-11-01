@@ -21,7 +21,7 @@ test.beforeEach(async ({ page, context }, info) => {
   await context.addInitScript((value) => {
     if (location.origin !== 'http://127.0.0.1:4187') return;
     if (!localStorage.getItem('courier-bill-app-v2.sealed-v1')) localStorage.setItem('courier-bill-app-v2', JSON.stringify(value));
-    window.print = () => { window.printCalls = (window.printCalls || 0) + 1; window.printedText = document.getElementById('invoicePaper').textContent; };
+    window.print = () => { const began = performance.now(); window.printCalls = (window.printCalls || 0) + 1; window.printedText = document.getElementById('invoicePaper').textContent; window.printCaptureMs = performance.now() - began; };
   }, data);
   await context.route('**/*', async (route) => {
     const url = new URL(route.request().url());
@@ -106,13 +106,23 @@ test('E: tampered preview total is blocked with server reconciliation', async ({
   await expect(page.locator('#invoiceSaveMessage')).toContainText('Expected total: Rs 63.72');
   expect(await page.evaluate(() => window.printCalls || 0)).toBe(0);
 });
-test('F: 100 synthetic shipments retain every line and printed total', async ({ page }) => {
-  await page.evaluate(() => { state.shipments = Array.from({ length: 100 }, (_, i) => ({ ...state.shipments[0], id: `row-${i}`, cno: `TEST-${i}` })); saveState(); renderShipments(); renderAll(); });
+test('F: 100 synthetic shipments retain every line and printed total', async ({ page }, info) => {
+  const renderMs = await page.evaluate(async () => { const began = performance.now(); state.shipments = Array.from({ length: 100 }, (_, i) => ({ ...state.shipments[0], id: `row-${i}`, cno: `TEST-${i}` })); saveState(); renderShipments(); renderAll(); await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); return performance.now() - began; });
   await expect(page.locator('#summaryFinal')).toHaveText('Rs 6372.00');
   await publish(page);
   const saved = await finalize(page);
   expect(saved.shipments).toHaveLength(100); expect(saved.totalAmount).toBe(6372);
   expect(await page.evaluate(() => window.printedText)).toContain('6372.00');
+  // The mocked synchronous dialog has already returned and removed its print CSS state.
+  // Reproduce only that authorized rendering interval after the real finalization assertions above.
+  await page.evaluate(() => { if (!window.CourierAuth.isAuthenticated() || state.persistence.confirmed.status !== 'GENERATED') throw new Error('Confirmed authenticated final invoice required.'); document.body.classList.add('final-print'); });
+  const pdfStarted = performance.now(); let pdf;
+  try { pdf = await page.pdf({ format: 'A4', printBackground: true }); }
+  finally { await page.evaluate(() => document.body.classList.remove('final-print')); }
+  const pdfGenerationMs = performance.now() - pdfStarted;
+  const pdfPages = (await require('../../server/node_modules/pdf-lib').PDFDocument.load(pdf)).getPageCount(); expect(pdfPages).toBeGreaterThan(1);
+  const fs = require('node:fs/promises'); await fs.mkdir('outputs', { recursive: true });
+  await fs.writeFile(`outputs/browser-performance-${info.project.name}.json`, JSON.stringify({ project: info.project.name, shipments: 100, samples: 1, renderAndTwoFramesMs: renderMs, printTextCaptureMs: await page.evaluate(() => window.printCaptureMs), pdfGenerationMs, pdfPages, pdfBytes: pdf.length, nativePrintDialogMeasured: false, scope: 'Synthetic Chromium rendering, print content and actual multipage PDF generation; not physical printing or hosted latency' }, null, 2));
 });
 test('G: backend unavailability retains draft and blocks verified final printing', async ({ page, context }) => {
   await publish(page);

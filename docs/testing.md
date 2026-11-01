@@ -1,5 +1,38 @@
 # Testing and local setup
 
+## Phase 6 operations and CI checks
+
+Run `npm run check` for all source JavaScript syntax and workflow JSON/YAML safety
+policy, `npm run check:secrets` for source-only secret/private-artifact checks,
+`npm test`, `npm run test:coverage`, both moderate-threshold npm audits, and
+`npm run test:operations` for the measured disposable replica-set recovery drill.
+Clean lockfile installation of both dependency trees and Chromium installation
+were executed. No linter is configured and none is silently invented.
+
+The existing 294 scenarios remain represented. Phase 6 adds 13 unit cases, two API
+cases and one protocol-compatibility browser case run on desktop/mobile: 311 total.
+See [actual named results](phase6-test-results.txt), [coverage](phase6-coverage.txt),
+[local drill evidence](phase6-drill-results.txt), and [report](phase6-report.md).
+
+New checks cover readiness dependency failure, real graceful/forced HTTP shutdown,
+startup failure, privacy-safe logs, production secret/proxy validation, CI mutations
+that must fail, backup-job authorization/failure/age/capacity/retention safeguards,
+missing archive/copy detection, session-collection exclusion, protocol mismatch,
+and service-worker cleanup limited to this app's obsolete caches. Existing tests
+cover sessions, expiry, CSRF, browser keys, offline retry and historical recovery.
+
+The operations drill separately measures actual local capture/encryption/file
+verification/restore, API latency and RSS using synthetic clients, six invoices
+(including a draft, generated, paid, cancelled and linked correction), shipments
+and two approved rate versions. It verifies indexes, original totals, corruption,
+wrong keys, quarantine, and restart persistence. Existing 100-shipment Chromium
+tests record rendering, print-text capture and actual three-page PDF generation;
+they do not measure physical printing. The final enhanced PDF subset passed on
+desktop/mobile after the full 311-case run; those two cases are not double-counted.
+
+The workflow has not run on GitHub and representative hosted staging is blocked.
+Local Windows checks must not be described as a successful Ubuntu hosted CI run.
+
 ## Phase 5 recovery and privacy
 
 The baseline 251 scenarios remain covered. Phase 5 adds 25 unit cases, 8 isolated

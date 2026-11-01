@@ -1,4 +1,11 @@
-# Architecture (Phases 0–5)
+# Architecture (Phases 0–6)
+
+Phase 6 adds a long-lived runtime controller with pre-listen index initialization,
+MongoDB/session readiness, graceful drain and privacy-safe request correlation.
+The production topology is documented in [deployment](deployment.md). CI tests and
+backup-job scripts do not deploy or schedule production work. The actual session
+collection is `operator_sessions`; both that and legacy `sessions` are excluded
+from business backups. A source audit found and fixed the earlier exclusion mismatch.
 
 Phase 5 adds authenticated-encrypted browser storage, a CSRF-protected key endpoint,
 versioned browser import/export, and a separate offline business-backup CLI. The CLI

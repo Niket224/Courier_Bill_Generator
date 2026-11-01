@@ -636,6 +636,20 @@ test('only one PDF is admitted while a provider operation is in flight', async (
   await client.post('/api/rates/parse-pdf').set('X-CSRF-Token', token).attach('pdf', bytes, 'test.pdf').expect(429);
   release(); assert.equal((await first).status, 200);
 });
+test('operational health, private counters and request identifiers expose no customer data', async () => {
+  await request(app).get('/api/health/live').expect(200, { status: 'alive' });
+  const ready = await request(app).get('/api/health/ready').expect(200);
+  assert.deepEqual(ready.body, { status: 'ready' }); assert.match(ready.headers['x-request-id'], /^[a-f0-9-]{36}$/);
+  await request(app).get('/api/ops/status').expect(401);
+  const metrics = await api.get('/api/ops/status').expect(200); assert.equal(metrics.body.ready, true); assert.ok(metrics.body.counters.requests > 0);
+  assert.equal(metrics.body.database, undefined); assert.equal(metrics.body.adminUsername, undefined);
+});
+test('incompatible client protocol rejects writes before persistence and correlation headers are server generated', async () => {
+  const input = invoiceInput();
+  const result = await api.post('/api/invoices/save').set('X-Courier-Protocol', 'future-v999').set('X-Request-ID', 'untrusted-client-id').send(input).expect(409);
+  assert.equal(result.body.code, 'CLIENT_VERSION'); assert.notEqual(result.headers['x-request-id'], 'untrusted-client-id');
+  assert.equal(await Invoice.countDocuments({ invoiceNumber: input.invoiceNumber }), 0);
+});
 test('disconnected isolated database fails safely without buffering a write', async () => {
   const memory = new (require('../../node_modules/express-session').MemoryStore)();
   const isolated = createApp(config, { sessionStore: memory });
@@ -643,6 +657,8 @@ test('disconnected isolated database fails safely without buffering a write', as
   const input = invoiceInput();
   await mongoose.disconnect();
   try {
+    await client.get('/api/health/live').expect(200);
+    await client.get('/api/health/ready').expect(503, { status: 'unavailable' });
     const result = await client.post('/api/invoices/save').set('X-CSRF-Token', token).send(input).expect(503);
     assert.equal(result.body.code, 'DATABASE_UNAVAILABLE');
   } finally { await mongoose.connect(testUri, { serverSelectionTimeoutMS: 5000 }); }

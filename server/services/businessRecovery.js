@@ -7,7 +7,7 @@ async function capture(client, databaseName, { signal } = {}) {
   try {
     await assertRecoveredDatabase(db);
     const names = (await db.listCollections({}, { nameOnly: true }).toArray()).map(x => x.name);
-    if (names.some(n => ![...Archive.COLLECTIONS, 'sessions', '_recovery'].includes(n))) throw new Error('Unknown collection: audit the backup inventory before continuing.');
+    if (names.some(n => ![...Archive.COLLECTIONS, 'sessions', 'operator_sessions', '_recovery'].includes(n))) throw new Error('Unknown collection: audit the backup inventory before continuing.');
     for (const name of Archive.COLLECTIONS) indexes[name] = names.includes(name) ? await db.collection(name).listIndexes().toArray() : [];
     session.startTransaction({ readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' }, maxCommitTimeMS: 10000 });
     let bytes = 0;

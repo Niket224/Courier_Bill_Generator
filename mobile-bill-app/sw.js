@@ -1,4 +1,4 @@
-const CACHE_NAME = "courier-bill-app-v11";
+const CACHE_NAME = "courier-bill-app-v12";
 const ASSETS = [
   "./",
   "./index.html",
@@ -9,7 +9,7 @@ const ASSETS = [
   "./app.js?v=10",
   "./rate-card.js?v=1",
   "./rate-review.js?v=2",
-  "./auth.js?v=4",
+  "./auth.js?v=5",
   "./persistence.js?v=2",
   "./manifest.webmanifest",
   "./assets/icon.svg",
@@ -24,7 +24,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))),
+      Promise.all(keys.filter((key) => key.startsWith('courier-bill-app-') && key !== CACHE_NAME).map((key) => caches.delete(key))),
     ).then(() => self.clients.claim()),
   );
 });

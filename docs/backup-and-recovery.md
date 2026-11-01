@@ -11,7 +11,7 @@ No production connection, dotenv secret, hosted tier, provider backup configurat
 | Critical audit/pricing history | `ratebooks`: approved versions, operator/time, active pointer and receipts; `ratecarddrafts`: current draft and revision operation ledger | Include both together; retain every stored version |
 | Temporary but valuable browser drafts | Current bill, unsaved shipments/rates, settings/images, rate review, pending save/publication/status requests, archived bills/reviews | Encrypted browser vault; export separately before device loss. Unsubmitted browser-only data is not in MongoDB |
 | Recoverable configuration | Node/app version, environment variable names, host/proxy/CORS setup | Source and documentation; keep actual secrets in a separate password manager |
-| Security-sensitive | `sessions`, password hash, session secret, Gemini key, browser encryption key, independent backup key | Excluded from business archive; reconfigure authentication separately, never restore stale sessions |
+| Security-sensitive | Actual `operator_sessions`, legacy `sessions`, password hash, session secret, Gemini key, browser encryption key, independent backup key | Excluded from business archive; reconfigure authentication separately, never restore stale sessions |
 | Regenerable cache | Service-worker static assets | Excluded; update/reinstall assets. Authenticated API responses are not cached |
 | Recovery control | `_recovery` staging marker | Created anew on restore; excluded from archive |
 

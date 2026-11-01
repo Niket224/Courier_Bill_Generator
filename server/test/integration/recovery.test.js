@@ -23,6 +23,7 @@ test('consistent backup includes several invoices/clients, shipments and multipl
   assert.equal(manifest.collections.invoices.length, 4); assert.equal(manifest.collections.clients.length, 2);
   assert.equal(manifest.collections.shipments.length, 1); assert.equal(manifest.collections.ratebooks[0].versions.length, 2);
   assert.equal(manifest.collections.sessions, undefined);
+  assert.equal(manifest.collections.operator_sessions, undefined);
 });
 test('encrypted full restore into a new empty database verifies exact records, indexes, status, tax and correction history', async () => {
   const key = randomBytes(32); const restored = await Recovery.restore(client, Archive.open(Archive.seal(manifest, key), key));
@@ -34,6 +35,7 @@ test('encrypted full restore into a new empty database verifies exact records, i
     assert.equal(actual.calculationSnapshot.appliedRates[0].rate.baseRate, 45);
   }
   assert.equal(await db.collection('sessions').countDocuments(), 0);
+  assert.equal(await db.collection('operator_sessions').countDocuments(), 0);
   const indexes = await db.collection('invoices').listIndexes().toArray(); assert.ok(indexes.some(i => i.unique && i.key.invoiceNumber === 1));
   assert.ok(indexes.some(i => i.unique && i.key['operations.requestId'] === 1));
   assert.equal((await db.collection('ratebooks').findOne({ _id: 'TEST' })).activeVersion, 2);

@@ -105,5 +105,6 @@ test('untrusted extracted names remain inert through server draft storage and re
   await draft(page); await page.reload(); await page.locator('button[data-target="rates"]').click();
   await page.locator('#loadRateDraftsButton').click(); await expect(page.locator('#rateDraftSelect option')).toHaveCount(1);
   await page.locator('#openRateDraftButton').click(); await expect(page.locator('#reviewClientName')).toHaveValue(value.clientInfo.clientName);
+  await expect(page.locator('#reviewStatus')).toContainText('Draft saved');
   expect(await page.evaluate(() => window.injected)).toBeUndefined(); await expect(page.locator('#pdfReviewModal img')).toHaveCount(0);
 });

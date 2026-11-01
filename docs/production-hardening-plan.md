@@ -1,5 +1,17 @@
 # Production hardening plan for one operator
 
+Phase 6 adds CI configuration, meaningful health/readiness, graceful runtime
+lifecycle, privacy-safe operational events/counters, guarded backup-job and monitor
+scripts, and a measured local recovery drill. See [deployment](deployment.md),
+[operations](operations.md), [CI](ci-cd.md), [rollback](rollback.md) and
+[staging gates](staging-checklist.md). No remote CI run, production scheduler,
+external alert, hosted staging resource or deployment was activated.
+
+Release gates remain: approved hosted staging/TLS/proxy verification, real secret
+custody, independent backup storage and verified schedule/alert delivery, timed
+off-device restore, and operator acceptance. The current recommendation is to
+proceed to an authorized staging drill, not directly to production.
+
 Phase 5 adds a verified encrypted logical backup/isolated restore path and encrypted
 browser drafts. See [backup architecture](backup-and-recovery.md), [privacy migration](browser-data-privacy.md),
 [recovery procedure](disaster-recovery-runbook.md), and [retention decision](data-retention.md).

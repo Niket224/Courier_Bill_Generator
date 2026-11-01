@@ -1,5 +1,12 @@
 # Disaster recovery runbook
 
+Phase 6 adds a guarded, **not activated** [backup-job procedure](operations.md),
+[monitoring](monitoring.md), and [representative staging checklist](staging-checklist.md).
+Run `npm run test:operations` for the measured disposable local drill. Its safe
+counts/timings are recorded separately from production RPO/RTO claims. Actual
+`operator_sessions` and legacy `sessions` collections are both excluded; Phase 6
+corrected the earlier exclusion-list mismatch without reading production records.
+
 These commands are procedures, **not evidence that production backups or scheduling are configured**. Only synthetic isolated restores were executed in Phase 5. Do not overwrite production. Keep the application's locked dependencies and this document available off-device without credentials.
 
 ## Prepare once

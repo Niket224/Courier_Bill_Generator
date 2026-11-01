@@ -1,24 +1,18 @@
-const dotenv = require('dotenv');
-const path = require('node:path');
-const { validateEnv } = require('./config/env');
+// Long-lived Node entry point; tests import runtime.js with an owned database.
 if (process.env.NODE_ENV === 'test') throw new Error('Use the isolated test harness; server.js cannot start in test mode.');
-dotenv.config({ path: path.join(__dirname, '.env') });
-const config = validateEnv(process.env);
-if (config.nodeEnv === 'test') throw new Error('Use the isolated test harness; server.js cannot start in test mode.');
-config.warnings.forEach((warning) => console.warn(`Configuration warning: ${warning}`));
-const connectDB = require('./config/db');
-const { createApp } = require('./app');
-const { createSessionStore } = require('./security/store');
-const connection = connectDB();
-const sessionStore = createSessionStore(connection.then((mongoose) => mongoose.connection.getClient()), config);
-const app = createApp(config, { sessionStore });
-Promise.all([connection, sessionStore.collectionP]).then(() => {
-  const server = app.listen(config.port, () => console.log(`Server running on port ${config.port}`));
-  server.requestTimeout = 45000;
-  server.headersTimeout = 10000;
-}).catch(() => {
-  console.error('Startup failed. Check database availability and session-store permissions.');
-  process.exitCode = 1;
-  connection.then((mongoose) => mongoose.disconnect()).catch(() => {});
-});
-module.exports = app;
+const { safeLogger } = require('./operations');
+const log = safeLogger();
+async function boot() {
+  require('dotenv').config({ path: require('node:path').join(__dirname, '.env') });
+  let config;
+  try { config = require('./config/env').validateEnv(process.env); }
+  catch (error) { console.error(error.message); throw new Error('Invalid configuration.'); }
+  if (config.nodeEnv === 'test') throw new Error('Use the isolated test harness.');
+  config.warnings.forEach(warning => console.warn(warning));
+  const runtime = await require('./runtime').start(config, { log });
+  const shutdown = () => runtime.shutdown().then(result => { process.exitCode = result.forced ? 1 : 0; }).catch(() => { log('shutdown_forced'); process.exitCode = 1; });
+  process.once('SIGTERM', shutdown); process.once('SIGINT', shutdown);
+  return runtime;
+}
+const startup = boot().catch(() => { log('startup_failed'); console.error('Startup refused. Check required environment configuration, database readiness and index permissions.'); process.exitCode = 1; });
+module.exports = startup;

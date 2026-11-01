@@ -6,15 +6,19 @@ const rateRoutes = require('./routes/rateRoutes');
 const invoiceRoutes = require('./routes/invoiceRoutes');
 const aiRoutes = require('./routes/aiRoutes');
 const rateCardRoutes = require('./routes/rateCardRoutes');
+const { createOperations, safeLogger } = require('./operations');
 
-function createApp(config, { sessionStore, limits, aiProvider, aiOptions } = {}) {
+function createApp(config, { sessionStore, limits, aiProvider, aiOptions, operations } = {}) {
   if (!config?.sessionSecret || !config.adminPasswordHash || !Array.isArray(config.allowedOrigins)) {
     throw new Error('Validated security configuration is required.');
   }
   const app = express();
+  const ops = operations || createOperations({ log: config.nodeEnv === 'test' ? () => {} : safeLogger() });
+  app.locals.operations = ops;
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy || false);
   app.use(helmet());
+  app.use(ops.middleware);
   app.use('/api', (req, res, next) => {
     res.set('Cache-Control', 'no-store');
     next();
@@ -28,16 +32,20 @@ function createApp(config, { sessionStore, limits, aiProvider, aiOptions } = {})
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'X-CSRF-Token']
+    allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'X-Courier-Protocol'],
+    exposedHeaders: ['X-Request-ID', 'X-Courier-Protocol', 'X-Courier-Release']
   }));
   // Login bodies stay small; invoice JSON has a separate bounded limit.
   app.use('/api/auth', express.json({ limit: '4kb' }));
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: false, limit: '16kb', parameterLimit: 50 }));
   app.get('/api/health', (req, res) => res.json({ status: 'ok', service: 'Courier Bill Generator API', timestamp: new Date().toISOString() }));
+  app.get('/api/health/live', (req, res) => res.json({ status: 'alive' }));
+  app.get('/api/health/ready', async (req, res) => { const ready = await ops.ready(); res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'unavailable' }); });
   const auth = createAuth(config, sessionStore, limits);
   app.use('/api', auth.middleware);
   app.use('/api/auth', auth.router);
+  app.get('/api/ops/status', auth.requireAdmin, async (req, res) => res.json({ success: true, ready: await ops.ready(), ...ops.status() }));
   app.post('/api/privacy/draft-key', auth.requireAdmin, auth.csrf, (req, res) => {
     if (!config.browserDraftKey) return res.status(503).json({ success: false, error: 'Browser encryption is not configured. Existing drafts are preserved.' });
     res.json({ success: true, key: config.browserDraftKey });
