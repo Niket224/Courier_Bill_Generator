@@ -9,7 +9,8 @@
     "test:integration": "node scripts/run-tests.mjs integration",
     "test:e2e": "node scripts/qa_mobile_app.mjs",
     "test:coverage": "node scripts/run-tests.mjs coverage",
-    "test:performance": "node scripts/benchmark-billing.cjs"
+    "test:performance": "node scripts/benchmark-billing.cjs",
+    "business:backup": "node server/scripts/business-backup.js"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",

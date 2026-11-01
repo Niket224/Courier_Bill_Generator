@@ -11,6 +11,7 @@
   const shell = document.querySelector('.app-shell');
   const message = document.getElementById('loginMessage');
   function lock(text = 'Sign in to access your billing workspace.') {
+    window.DraftVault.lock();
     generation++;
     csrfToken = null;
     authenticated = false;
@@ -26,8 +27,9 @@
     csrfToken = data.csrfToken;
     authenticated = true;
     generation++;
-    shell.hidden = false;
-    panel.hidden = true;
+    shell.hidden = true;
+    panel.hidden = false;
+    message.textContent = 'Unlocking encrypted drafts…';
     window.dispatchEvent(new CustomEvent('courier:auth', { detail: true }));
     clearTimeout(expiryTimer);
     expiryTimer = setTimeout(() => lock('Your session expired. Sign in again; your draft is preserved.'), Math.max(0, data.expiresAt - Date.now()));
@@ -87,7 +89,7 @@
   });
   document.addEventListener('click', async (event) => {
     if (!event.target.closest('#logoutButton')) return;
-    try { await apiFetch(`${base}/auth/logout`, { method: 'POST' }); lock('Signed out. Your draft is preserved on this device.'); }
+    try { await window.DraftVault.flush(); await apiFetch(`${base}/auth/logout`, { method: 'POST' }); lock('Signed out. Your encrypted draft is preserved on this device.'); }
     catch (error) { if (authenticated) window.alert(error.message); }
   });
   fetch(`${base}/auth/session`, { credentials: 'include', cache: 'no-store' })

@@ -3,7 +3,7 @@ const fixture = require('../fixtures/bill.json');
 const { password } = require('../fixtures/auth.cjs');
 test.beforeEach(async ({ context }, testInfo) => {
   await context.addInitScript((data) => {
-    if (!localStorage.getItem('courier-bill-app-v2')) localStorage.setItem('courier-bill-app-v2', JSON.stringify(data));
+    if (!localStorage.getItem('courier-bill-app-v2') && !localStorage.getItem('courier-bill-app-v2.sealed-v1')) localStorage.setItem('courier-bill-app-v2', JSON.stringify(data));
     window.print = () => { window.printCalls = (window.printCalls || 0) + 1; };
   }, { ...fixture, bill: { ...fixture.bill, invoiceNo: testInfo.title.startsWith('draft revisions')
     ? (testInfo.project.name === 'mobile' ? '103/2026' : '102/2026')
@@ -69,7 +69,7 @@ test('API session expiry returns to login without losing draft', async ({ page, 
   await context.route('**/api/invoices/search?*', (route) => route.fulfill({ status: 401, json: { error: 'Please sign in.' } }));
   await page.locator('button[data-target="history"]').click();
   await expect(page.locator('#loginMessage')).toContainText('session expired');
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('courier-bill-app-v2')).shipments[0].cno)).toBe('TEST001');
+  expect((await require('../fixtures/read-vault.cjs')(page)).shipments[0].cno).toBe('TEST001');
 });
 test('absolute session timer locks the frontend', async ({ page }) => {
   await page.clock.install();

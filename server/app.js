@@ -38,6 +38,10 @@ function createApp(config, { sessionStore, limits, aiProvider, aiOptions } = {})
   const auth = createAuth(config, sessionStore, limits);
   app.use('/api', auth.middleware);
   app.use('/api/auth', auth.router);
+  app.post('/api/privacy/draft-key', auth.requireAdmin, auth.csrf, (req, res) => {
+    if (!config.browserDraftKey) return res.status(503).json({ success: false, error: 'Browser encryption is not configured. Existing drafts are preserved.' });
+    res.json({ success: true, key: config.browserDraftKey });
+  });
   app.use('/api/rates', auth.requireAdmin, auth.csrf);
   app.post('/api/rates/parse-pdf', auth.pdfLimit);
   app.use('/api/rates', rateRoutes, aiRoutes({ config, provider: aiProvider, ...aiOptions }));

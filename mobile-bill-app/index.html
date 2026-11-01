@@ -355,13 +355,13 @@
 
           <div class="tool-card">
             <h3>Backup Data</h3>
-            <p>Phone change karne se pehle backup file download kar lo.</p>
-            <button class="secondary-button" id="exportButton" type="button">Download Backup</button>
+            <p>Export this browser's drafts, settings and recovery archives before changing devices. The JSON file is private and unencrypted. MongoDB invoices and published history need a separate business backup.</p>
+            <button class="secondary-button" id="exportButton" type="button">Export browser data</button>
           </div>
 
           <div class="tool-card">
             <h3>Restore Data</h3>
-            <p>Pehle se download ki hui backup file select karo.</p>
+            <p>Import browser data after reviewing its summary. Your current draft is archived first; server records are not replaced.</p>
             <input id="importInput" type="file" accept="application/json" />
           </div>
 
@@ -486,10 +486,12 @@
     </div>
 
     <script src="billing.js?v=1" defer></script>
+    <script src="browser-data.js?v=1" defer></script>
+    <script src="draft-vault.js?v=1" defer></script>
     <script src="rate-card.js?v=1" defer></script>
-    <script src="rate-review.js?v=1" defer></script>
-    <script src="auth.js?v=3" defer></script>
+    <script src="rate-review.js?v=2" defer></script>
+    <script src="auth.js?v=4" defer></script>
     <script src="persistence.js?v=2" defer></script>
-    <script src="app.js?v=9" defer></script>
+    <script src="app.js?v=10" defer></script>
   </body>
 </html>

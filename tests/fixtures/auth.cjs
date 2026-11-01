@@ -4,6 +4,7 @@ let hash;
 async function authConfig(overrides = {}) {
   hash ||= hashPassword(password);
   return { nodeEnv: 'test', adminUsername: 'test-admin', adminPasswordHash: await hash,
+    browserDraftKey: Buffer.alloc(32, 7).toString('base64'),
     sessionSecret: 'synthetic-session-secret-for-tests-only-123456789', sessionMaxAge: 480 * 60000,
     allowedOrigins: ['http://127.0.0.1:4187', 'https://billing.example.test'], trustProxy: false, ...overrides };
 }

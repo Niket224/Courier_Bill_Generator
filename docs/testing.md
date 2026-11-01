@@ -1,5 +1,42 @@
 # Testing and local setup
 
+## Phase 5 recovery and privacy
+
+The baseline 251 scenarios remain covered. Phase 5 adds 25 unit cases, 8 isolated
+integration cases and 5 browser cases executed on desktop/mobile: **294 tests**
+(123 unit, 75 API, 96 browser). Full named results are retained in
+[Phase 5 test output](phase5-test-results.txt); [coverage output](phase5-coverage.txt)
+includes the backend, billing/rate-card contracts and new browser data/vault modules.
+Browser-only DOM controllers are not included in Node coverage.
+
+The restore integration suite provisions an owned single-node MongoDB replica set,
+captures all business collections consistently, encrypts/decrypts the archive,
+restores into fresh loopback databases and verifies exact records and indexes.
+The browser API on **4190** serves a genuinely restored synthetic database for
+historical search/print tests. Existing APIs 4188/4189 retain their original isolation.
+All harnesses strip production credentials; Gemini remains mocked. No new dependencies
+were needed. Run the existing clean-checkout commands below, then `npm test` and
+`npm run test:coverage`.
+
+Additional checks cover wrong/lost keys, corrupt archives, schema/count/checksum
+mismatches, broken references, interrupted backup and restore, quarantined startup,
+real encrypted-file write/readback, collision refusal, storage quota, browser migration,
+refresh/expiry, strict legacy import, prototype/secret-field rejection, cross-tab conflicts,
+and 41 publication attempts without history deletion. The encrypted-file test checks
+its resolved temporary directory before removing only synthetic test files.
+
+The first unit regression run exposed missing vault mocks in five old characterization
+cases; those fixtures were updated. An initial restore assertion compared JSON key order
+instead of record equality (74 passed/1 failed); it now checks all record values deeply.
+The first new browser subset had 8 passes/2 failures because its expiry URL matcher
+missed the nested history endpoint; the matcher was corrected. Final results and
+remaining operational limits are in [the Phase 5 report](phase5-report.md).
+
+Production backup scheduling, actual Atlas tier, off-device storage durability and live
+provider recovery remain unverified. Use the [runbook](disaster-recovery-runbook.md)
+for separately authorized staging/production procedures; CLI commands are not test
+credentials and never fall back to application MONGO_URI.
+
 ## Current Phase 4 verification
 
 `npm test`: **251 passed** (98 unit, 67 isolated API, 86 Chromium desktop/mobile),

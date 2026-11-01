@@ -80,7 +80,7 @@
     if (review()?.pending) { display(); status('Resolve the pending request before starting a different import.'); return; }
     if (review()) {
       // Keep the preceding review recoverable without replacing the active pricing table.
-      localStorage.setItem(`courier-rate-review-archive-${crypto.randomUUID()}`, JSON.stringify(review()));
+      window.DraftVault.setItem(`courier-rate-review-archive-${crypto.randomUUID()}`, JSON.stringify(review()));
     }
     options.getState().rateReview = { card: structuredClone(card), saved: null, pending: null, book: null };
     persist(); display(); el('resumeRateReviewButton').hidden = false;
@@ -89,6 +89,7 @@
     const r = review(); if (!r?.pending || busy) return;
     const mine = epoch; const pending = r.pending; busy = true; controls(); status('Saving request; waiting for backend confirmation…');
     try {
+      await window.DraftVault.flush();
       const result = await request(pending.path, pending.body);
       if (mine !== epoch || !review()) return;
       if (pending.path.endsWith('/drafts')) {
@@ -98,14 +99,14 @@
         const book = await request(`/rate-cards/book?shipperCode=${encodeURIComponent(r.card.shipperCode)}`);
         if (mine !== epoch) return;
         r.book = book.data; r.bookRevision = book.data?.revision || 0; persist(); display();
-        status(`Draft saved at revision ${r.saved.revision}. Active version ${r.bookRevision}; explicit approval and Publish are still required.`);
+        status(`Draft saved at revision ${r.saved.revision}. Active version ${r.bookRevision}; explicit approval and Publish are still required.${r.bookRevision >= 35 ? ' Retention warning: the 40-version safety limit is near or reached. No versions are deleted; plan an approved archive extension before further publication or rollback.' : ''}`);
       } else {
         const book = result.data;
         if (!book || book._id !== pending.body.shipperCode || book.activeVersion !== result.operationRevision || book.revision !== result.operationRevision || !book.operations?.some((op) => op.requestId === pending.body.requestId)) throw new Error('Publication outcome is not the current active version. Reload server status before continuing.');
         const active = book.versions.find((v) => v.version === book.activeVersion);
         if (!active) throw new Error('Published version could not be confirmed.');
         r.pending = null; r.book = book; r.bookRevision = book.revision; r.card = active.card; r.saved = null; persist();
-        const applied = options.onPublished(active.card);
+        const applied = await options.onPublished(active.card);
         display(); status(`Published version ${book.activeVersion} confirmed.${applied ? '' : ' Local draft could not be synchronized; load published rates.'}`);
       }
     } catch (error) {

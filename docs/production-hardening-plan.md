@@ -1,5 +1,16 @@
 # Production hardening plan for one operator
 
+Phase 5 adds a verified encrypted logical backup/isolated restore path and encrypted
+browser drafts. See [backup architecture](backup-and-recovery.md), [privacy migration](browser-data-privacy.md),
+[recovery procedure](disaster-recovery-runbook.md), and [retention decision](data-retention.md).
+No production backup, scheduler, alert or retention deletion has been configured.
+Before rollout, the operator must provision/recover BROWSER_DRAFT_KEY, approve actual
+backup storage/key custody and scheduling, verify hosting snapshot support, and run
+a timed recovery drill. Any production restore/cutover requires separate explicit approval.
+The next phase should verify operational staging, monitoring, backup cadence and
+operator recovery usability on the actual host; do not infer production readiness
+from the isolated test evidence alone.
+
 Phase 4 extraction and approval controls are implemented and tested; see
 [report](phase4-report.md), [AI contract](ai-rate-card-contract.md) and
 [publication/rollout checklist](rate-card-publication.md). Before production:

@@ -13,3 +13,9 @@ playwright-report/
 coverage/
 outputs/
 *backup*.json
+# Private encrypted archives and key material are never source artifacts.
+*.cbackup
+*.partial
+*.backup-key
+backups/
+recovery-data/

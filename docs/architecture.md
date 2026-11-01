@@ -1,4 +1,13 @@
-# Architecture (Phases 0–4)
+# Architecture (Phases 0–5)
+
+Phase 5 adds authenticated-encrypted browser storage, a CSRF-protected key endpoint,
+versioned browser import/export, and a separate offline business-backup CLI. The CLI
+captures six business collections consistently, excludes sessions/secrets, restores
+only to fresh isolated loopback databases, and verifies records/indexes before marking
+recovery complete. Startup refuses quarantined restores. See [data inventory and backup design](backup-and-recovery.md),
+[browser privacy](browser-data-privacy.md) and [recovery runbook](disaster-recovery-runbook.md).
+Descriptions of plaintext localStorage in earlier phase sections are superseded by
+the encrypted vault; it still uses localStorage for ciphertext, not IndexedDB.
 
 Phase 4 adds a shared strict rate-card contract, bounded PDF validation worker,
 injected/mocked AI provider boundary, server review drafts and an atomic per-shipper

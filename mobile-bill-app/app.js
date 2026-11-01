@@ -2,41 +2,14 @@ const STORAGE_KEY = "courier-bill-app-v2";
 
 const defaultState = {
   bill: {
-    businessName: "GEETA SWARUP ENTERPRISES",
-    courierBrand: "JETLINE COURIERS PVT LTD",
-    businessAddress: "B GROUND FLOOR ADHARSHILA COMPLEX SOUTH GANDHI MAIDAN, PATNA",
-    mobileNo: "8709210300",
-    sacCode: "996812",
-    billTo: "M/S BANDHAN BANK LTD",
-    billAddress: "ASHOK RAJ PATH, PATNA",
-    gstNo: "",
-    branchCode: "PATN",
-    shipperCode: "BANDAN (A)",
-    invoiceNo: "2516/2025",
-    invoiceDate: "2025-07-01",
-    periodStart: "2025-07-01",
-    periodEnd: "2025-07-31",
-    fuelPct: 20,
-    cgstPct: 9,
-    sgstPct: 9,
-    logoSrc: "assets/logo.png",
-    signatureSrc: "",
+    businessName: '', courierBrand: '', businessAddress: '', mobileNo: '', sacCode: '',
+    billTo: '', billAddress: '', gstNo: '', branchCode: '', shipperCode: '', invoiceNo: '',
+    invoiceDate: '', periodStart: '', periodEnd: '', fuelPct: 20, cgstPct: 9, sgstPct: 9,
+    logoSrc: 'assets/logo.png', signatureSrc: ''
   },
-  rates: [
-    { id: cryptoId(), client: "BANDAN (A)", destination: "PATNA", baseKg: 3, baseRate: 45, perKgRate: 15 },
-    { id: cryptoId(), client: "BANDAN (A)", destination: "BIHAR", baseKg: 3, baseRate: 45, perKgRate: 15 },
-    { id: cryptoId(), client: "BANDAN (A)", destination: "DHANBAD", baseKg: 3, baseRate: 60, perKgRate: 20 },
-    { id: cryptoId(), client: "BANDAN (A)", destination: "DARBHANGA", baseKg: 3, baseRate: 50, perKgRate: 18 },
-  ],
-  shipments: [
-    { id: cryptoId(), cno: "13595898", date: "2025-07-11", destination: "PATNA", type: "D", pcs: 1, weight: 0.1, manualAmount: "" },
-    { id: cryptoId(), cno: "13595899", date: "2025-07-11", destination: "PATNA", type: "D", pcs: 1, weight: 0.1, manualAmount: "" },
-    { id: cryptoId(), cno: "13595900", date: "2025-07-11", destination: "PATNA", type: "D", pcs: 1, weight: 0.1, manualAmount: "" },
-    { id: cryptoId(), cno: "13603768", date: "2025-07-17", destination: "DHANBAD", type: "D", pcs: 1, weight: 0.1, manualAmount: "" },
-    { id: cryptoId(), cno: "13635933", date: "2025-07-31", destination: "DARBHANGA", type: "D", pcs: 1, weight: 0.1, manualAmount: "" },
-  ],
+  rates: [],
+  shipments: []
 };
-
 // Do not load private drafts until the server confirms the operator's session.
 let state = null;
 let workspaceEpoch = 0;
@@ -86,14 +59,14 @@ function mergeImportedState(imported) {
 
 function loadState() {
   if (!window.CourierAuth.isAuthenticated()) throw new Error('Sign in to open private drafts.');
-  const raw = localStorage.getItem(STORAGE_KEY);
+  const raw = window.DraftVault.getItem(STORAGE_KEY);
   if (!raw) {
     const fresh = structuredClone(defaultState);
     fresh.bill.logoSrc = "assets/logo.png";
     return fresh;
   }
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = window.BrowserData.parse(raw);
     if (!parsed?.bill || typeof parsed.bill !== 'object' || !Array.isArray(parsed.rates) || !Array.isArray(parsed.shipments)) throw new Error('Invalid stored draft');
     const loaded = mergeImportedState(parsed);
     if (loaded.bill.logoSrc === "" || loaded.bill.logoSrc === undefined) {
@@ -112,14 +85,24 @@ function saveState(markDirty = true) {
     historicalRecord = null;
     state.persistence ||= {};
     state.persistence.dirty = true;
-    setInvoiceSaveState('Unsaved', 'Changes are stored on this device until a save is confirmed.');
+    setInvoiceSaveState('Unsaved', 'Encrypting local changes. Keep this tab open until local storage completes.');
   }
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); return true; }
+  try {
+    window.DraftVault.setItem(STORAGE_KEY, JSON.stringify(state));
+    const current = state;
+    window.DraftVault.flush().then(() => { if (state === current && markDirty && !invoiceSaving) setInvoiceSaveState('Unsaved', 'Encrypted draft stored on this device; server save is still required.'); }).catch(() => { if (state === current) setInvoiceSaveState('Failed to save', 'Encrypted device storage failed. Keep this tab open and export your work.'); });
+    return true;
+  }
   catch { setInvoiceSaveState('Failed to save', 'Device storage is full. Keep this tab open and download a backup before continuing.'); return false; }
 }
 
 function money(value) {
   return `Rs ${Number(value || 0).toFixed(2)}`;
+}
+async function saveEncryptedState(markDirty = true) {
+  if (!saveState(markDirty)) return false;
+  try { await window.DraftVault.flush(); return true; }
+  catch { setInvoiceSaveState('Failed to save', 'Encrypted draft could not be stored. Keep this tab open and export your work.'); return false; }
 }
 
 function plainMoney(value) {
@@ -169,7 +152,7 @@ async function publishCurrentRates() {
     if (!cards.length) throw new Error('No reviewed exact-destination cards are published for this shipper.');
     if (epoch !== workspaceEpoch || !state) return;
     if (!confirm('Replace this shipper’s local rates with published cards? Your current draft will be archived first.')) return;
-    if (!archiveCurrentDraft()) return;
+    if (!await archiveCurrentDraft()) return;
     state.rates = [...state.rates.filter((r) => normalize(r.client) !== normalize(state.bill.shipperCode)), ...cards.map((r) => ({ id: cryptoId(), client: r.shipperCode, destination: r.targetName.toUpperCase(), baseKg: r.baseKg, baseRate: r.baseRate, perKgRate: r.perKgRate }))];
     saveState(); renderRates(); renderShipments(); renderAll();
   } catch (error) { if (epoch === workspaceEpoch) setInvoiceSaveState('Failed to save', error.message); }
@@ -709,10 +692,12 @@ function focusLastRateField(field) {
   });
 }
 
-function newBill() {
+async function newBill() {
   if (!state || invoiceSaving) return;
+  const epoch = workspaceEpoch;
   if (!confirm("Shipments clear hongi. Invoice no. aur period agle mahine par shift honge. Rates safe rahenge. Continue?")) return;
-  if (!archiveCurrentDraft()) return;
+  if (!await archiveCurrentDraft()) return;
+  if (!state || epoch !== workspaceEpoch) return;
   const previous = structuredClone(state);
   const nextPeriod = nextPeriodDates(state.bill.periodEnd);
   state.bill.invoiceNo = nextInvoiceNo(state.bill.invoiceNo);
@@ -724,7 +709,7 @@ function newBill() {
   delete state.correctionOf;
   delete state.correctionReason;
   delete state.invoiceMetadata;
-  if (!saveState()) { state = previous; return; }
+  if (!await saveEncryptedState()) { state = previous; return; }
   document.getElementById('invoiceDueDate').value = '';
   document.getElementById('invoiceNotes').value = '';
   billFields.forEach((field) => {
@@ -889,35 +874,57 @@ function switchScreen(target) {
 }
 
 function exportData() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  if (!state || !window.CourierAuth.isAuthenticated()) return;
+  let data;
+  try { data = window.BrowserData.exportBackup(state, window.DraftVault.entries()); }
+  catch (error) { alert(error.message); return; }
+  if (!confirm('Export private browser data as an unencrypted JSON file? Store it securely. This does not back up MongoDB invoices or published history.')) return;
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = `courier-bill-backup-${new Date().toISOString().slice(0, 10)}.json`;
   link.click();
   URL.revokeObjectURL(url);
+  showToast('Browser export requested. Verify the downloaded file and store it securely.');
 }
 
 function importData(file) {
+  const epoch = workspaceEpoch;
   const reader = new FileReader();
-  reader.onload = () => {
-    if (!state || !window.CourierAuth.isAuthenticated()) return;
+  reader.onload = async () => {
+    if (!state || epoch !== workspaceEpoch || !window.CourierAuth.isAuthenticated()) return;
     try {
-      const imported = JSON.parse(String(reader.result));
-      if (!imported?.bill || typeof imported.bill !== 'object' || !Array.isArray(imported.rates) || !Array.isArray(imported.shipments)) throw new Error("invalid");
-      if (!confirm("Current data backup file se replace ho jayegi. Continue?")) return;
-      if (!archiveCurrentDraft()) return;
-      state = mergeImportedState(imported);
-      saveState();
+      const imported = window.BrowserData.importBackup(String(reader.result));
+      if (!confirm(`Import preview: ${imported.state.shipments.length} shipments, ${imported.state.rates.length} rates, ${Object.keys(imported.records).length} recovery entries. Replace the current browser draft? It will be archived first. MongoDB records will not change.`)) return;
+      if (!await archiveCurrentDraft()) return;
+      if (!state || epoch !== workspaceEpoch) return;
+      const previous = state;
+      try {
+        for (const [name, raw] of Object.entries(imported.records)) {
+          if (name === STORAGE_KEY) continue;
+          if (window.DraftVault.getItem(name) && window.DraftVault.getItem(name) !== raw) throw new Error('An imported recovery entry conflicts with existing data. Nothing was replaced.');
+        }
+        for (const [name, raw] of Object.entries(imported.records)) if (name !== STORAGE_KEY) window.DraftVault.setItem(name, raw);
+        await window.DraftVault.flush();
+        if (!state || epoch !== workspaceEpoch) return;
+        state = mergeImportedState(imported.state);
+        if (!saveState()) throw new Error('Cannot store imported draft.');
+        await window.DraftVault.flush();
+        if (!state || epoch !== workspaceEpoch) return;
+        if (window.DraftVault.getItem(STORAGE_KEY) !== JSON.stringify(state)) throw new Error('Import verification failed.');
+      } catch (error) { if (epoch === workspaceEpoch) state = previous; throw error; }
       init(false);
-      showToast("Backup restore ho gaya.");
-    } catch {
-      alert("Backup file read nahi ho paayi. Sahi JSON file choose karo.");
+      showToast('Browser import verified. Server records were not changed.');
+    } catch (error) {
+      alert(`Import failed; the previous working draft is preserved. ${error.message}`);
     } finally {
       const input = document.getElementById("importInput");
       if (input) input.value = "";
     }
   };
+  if (file.size > window.BrowserData.MAX) { alert('Browser backup exceeds the size limit.'); return; }
+  reader.onerror = () => alert('Could not read the backup. Current draft preserved.');
   reader.readAsText(file);
 }
 
@@ -1080,7 +1087,6 @@ function init(bind = true) {
   }
   document.getElementById("exportButton").addEventListener("click", () => {
     exportData();
-    showToast("Backup download ho gaya.");
   });
   document.getElementById("bulkImportButton")?.addEventListener("click", importBulkShipments);
   document.getElementById("importInput").addEventListener("change", (event) => {
@@ -1146,11 +1152,11 @@ function setupAiPdfParser() {
   window.RateReview.bind({
     getState: () => state,
     persist: () => saveState(false),
-    onPublished: (card) => {
-      if (!state || !archiveCurrentDraft()) return false;
+    onPublished: async (card) => {
+      if (!state || !await archiveCurrentDraft()) return false;
       state.rates = [...state.rates.filter((r) => normalize(r.client) !== normalize(card.shipperCode)),
         ...card.rates.filter((r) => r.targetType === 'CITY').map((r) => ({ id: cryptoId(), client: card.shipperCode, destination: r.targetName.toUpperCase(), baseKg: r.baseKg, baseRate: r.baseRate, perKgRate: r.perKgRate }))];
-      if (!saveState()) return false;
+      if (!await saveEncryptedState()) return false;
       renderRates(); renderShipments(); renderAll();
       setInvoiceSaveState('Unsaved', 'Rates published. Invoice preview remains provisional until server verification.');
       return true;
@@ -1293,6 +1299,8 @@ async function persistInvoiceToBackend(status = 'DRAFT', printAfter = false) {
       if (!saveState(false)) { delete meta.pending; throw new Error('Cannot safely retain the retry request. Free device storage or download a backup.'); }
     }
     const pending = meta.pending;
+    await window.DraftVault.flush();
+    if (state !== current || epoch !== workspaceEpoch) return false;
     setInvoiceSaveState('Saving', `Confirming ${pending.payload.status.toLowerCase()} invoice persistence…`);
     const response = await window.CourierAuth.apiFetch(`${API_BASE}/invoices/save`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pending.payload), signal: controller.signal
@@ -1311,6 +1319,8 @@ async function persistInvoiceToBackend(status = 'DRAFT', printAfter = false) {
     const unchanged = contentHash === pending.contentHash && await invoiceHash(invoicePayload(status)) === pending.contentHash;
     meta.dirty = !unchanged;
     if (!saveState(false)) throw new Error('Server saved the invoice, but the device could not retain its receipt. Check History before continuing.');
+    await window.DraftVault.flush();
+    if (state !== current || epoch !== workspaceEpoch) return false;
     if (!unchanged) {
       setInvoiceSaveState('Unsaved', 'The earlier snapshot was saved. Current edits are still unsaved; finalized content requires a correction.');
       return false;
@@ -1335,10 +1345,11 @@ async function persistInvoiceToBackend(status = 'DRAFT', printAfter = false) {
   }
 }
 const ARCHIVE_PREFIX = 'courier-bill-archive-';
-function archiveCurrentDraft() {
+async function archiveCurrentDraft() {
   if (!state) return false;
   try {
-    localStorage.setItem(ARCHIVE_PREFIX + crypto.randomUUID(), JSON.stringify({ createdAt: new Date().toISOString(), state }));
+    window.DraftVault.setItem(ARCHIVE_PREFIX + crypto.randomUUID(), JSON.stringify({ createdAt: new Date().toISOString(), state }));
+    await window.DraftVault.flush();
     renderDraftArchives();
     return true;
   } catch { alert('Cannot archive this draft: device storage is full. Download a backup first. Nothing was cleared.'); return false; }
@@ -1347,44 +1358,57 @@ function renderDraftArchives() {
   const select = document.getElementById('draftArchiveSelect');
   if (!select || !state) return;
   const options = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
+  for (let i = 0; i < window.DraftVault.length; i++) {
+    const key = window.DraftVault.key(i);
     if (!key.startsWith(ARCHIVE_PREFIX)) continue;
-    try { const entry = JSON.parse(localStorage.getItem(key)); options.push({ key, date: entry.createdAt, number: entry.state.bill.invoiceNo }); } catch { /* Keep unreadable archives untouched. */ }
+    try { const entry = JSON.parse(window.DraftVault.getItem(key)); options.push({ key, date: entry.createdAt, number: entry.state.bill.invoiceNo }); } catch { /* Keep unreadable archives untouched. */ }
   }
   options.sort((a, b) => b.date.localeCompare(a.date));
   select.innerHTML = options.map((entry) => `<option value="${escapeHtml(entry.key)}">${escapeHtml(entry.number)} — ${escapeHtml(entry.date)}</option>`).join('');
 }
-function restoreLocalArchive() {
+async function restoreLocalArchive() {
   if (!state || invoiceSaving) return;
+  const epoch = workspaceEpoch;
   const key = document.getElementById('draftArchiveSelect').value;
   if (!key || !key.startsWith(ARCHIVE_PREFIX)) return;
-  const restored = JSON.parse(localStorage.getItem(key));
+  const restored = JSON.parse(window.DraftVault.getItem(key));
   if (!confirm('Restore this archived draft? The current draft will be archived first.')) return;
-  if (!archiveCurrentDraft()) return;
+  if (!await archiveCurrentDraft()) return;
+  if (!state || epoch !== workspaceEpoch) return;
   const previous = state;
   const previousRecord = historicalRecord;
   state = mergeImportedState(restored.state);
   historicalRecord = null;
-  if (!saveState(false)) { state = previous; historicalRecord = previousRecord; return; }
+  if (!await saveEncryptedState(false)) { state = previous; historicalRecord = previousRecord; return; }
   init(false);
   switchScreen('invoice');
 }
-function activateWorkspace() {
+async function activateWorkspace() {
   if (state || !window.CourierAuth.isAuthenticated()) return;
-  workspaceEpoch++;
+  const epoch = ++workspaceEpoch;
   localDraftConflict = false;
-  try { state = loadState(); } catch (error) {
+  try {
+    const response = await window.CourierAuth.apiFetch(`${API_BASE}/privacy/draft-key`, { method: 'POST' });
+    const result = await response.json();
+    if (epoch !== workspaceEpoch || !window.CourierAuth.isAuthenticated()) return;
+    if (!result.success || typeof result.key !== 'string') throw new Error('Browser encryption key unavailable.');
+    if (!await window.DraftVault.unlock(result.key) || epoch !== workspaceEpoch || !window.CourierAuth.isAuthenticated()) return;
+    result.key = null;
+    state = loadState();
+  } catch (error) {
+    if (epoch !== workspaceEpoch) return;
     const shell = document.querySelector('.app-shell');
     shell.innerHTML = '<p>Stored draft could not be read and was not modified.</p><button id="recoverRawDraft" type="button">Download draft for recovery</button><button id="logoutButton" type="button">Sign out</button>';
+    shell.hidden = false; document.getElementById('loginPanel').hidden = true;
     document.getElementById('recoverRawDraft').addEventListener('click', () => {
-      if (window.CourierAuth.isAuthenticated()) downloadRecord(localStorage.getItem(STORAGE_KEY), 'unreadable-draft.json');
+      if (window.CourierAuth.isAuthenticated()) downloadRecord(window.DraftVault.isUnlocked() ? window.DraftVault.getItem(STORAGE_KEY) : JSON.stringify(Object.fromEntries(Object.entries(localStorage).filter(([key]) => window.BrowserData.privateKey(key)))), 'unreadable-draft.json');
     });
     return;
   }
   state.bill.taxMode ||= 'SPLIT';
   state.bill.igstPct ??= 0;
   init();
+  document.querySelector('.app-shell').hidden = false; document.getElementById('loginPanel').hidden = true;
 }
 function clearPrivateWorkspace() {
   workspaceEpoch++;
@@ -1399,13 +1423,15 @@ function clearPrivateWorkspace() {
 }
 window.addEventListener('courier:auth', (event) => event.detail ? activateWorkspace() : clearPrivateWorkspace());
 window.addEventListener('afterprint', () => document.body.classList.remove('final-print'));
-window.addEventListener('storage', (event) => {
-  if (event.key !== STORAGE_KEY || !state || !window.CourierAuth.isAuthenticated()) return;
+window.addEventListener('storage', async (event) => {
+  if (![STORAGE_KEY, STORAGE_KEY + window.DraftVault.suffix].includes(event.key) || !state || !window.CourierAuth.isAuthenticated()) return;
   if (event.newValue === JSON.stringify(state)) return;
-  const archived = archiveCurrentDraft();
+  const archived = await archiveCurrentDraft();
   localDraftConflict = true;
   setInvoiceSaveState('Failed to save', archived ? 'Another tab changed the draft. This tab was archived; reload or restore it from Tools.' : 'Another tab changed the draft. Download a backup from this tab before reloading.');
 });
+window.addEventListener('courier:storage-error', (event) => { if (state) setInvoiceSaveState('Failed to save', event.detail); });
+window.addEventListener('beforeunload', (event) => { if (window.DraftVault.pending) { event.preventDefault(); event.returnValue = ''; } });
 const originalSwitchScreen = switchScreen;
 switchScreen = function (target) {
   if (!state || !window.CourierAuth.isAuthenticated()) return;
@@ -1440,21 +1466,22 @@ async function handleHistoryAction(event) {
     if (action === 'download') { downloadRecord(invoice, 'invoice-record.json'); return; }
     if (['PAID', 'CANCELLED'].includes(action)) {
       const key = `courier-invoice-transition-${id}`;
-      let pending = JSON.parse(localStorage.getItem(key) || 'null');
+      let pending = JSON.parse(window.DraftVault.getItem(key) || 'null');
       if (pending && pending.status !== action) throw new Error('An earlier status change is unresolved. Retry that action first.');
       if (!pending) {
         const reason = prompt(action === 'PAID' ? 'Payment reference / reason:' : 'Cancellation reason (the original invoice will be retained):');
         if (!reason?.trim()) return;
         pending = { requestId: crypto.randomUUID(), expectedVersion: invoice.revision, status: action, reason: reason.trim() };
-        localStorage.setItem(key, JSON.stringify(pending));
+        window.DraftVault.setItem(key, JSON.stringify(pending));
       }
       const controller = new AbortController();
+      await window.DraftVault.flush();
       const timer = setTimeout(() => controller.abort(), 15000);
       let changed;
       try { changed = await (await window.CourierAuth.apiFetch(`${API_BASE}/invoices/${id}/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pending), signal: controller.signal })).json(); }
       finally { clearTimeout(timer); }
       if (changed.success !== true || !changed.data?.operations?.some((op) => op.requestId === pending.requestId)) throw new Error('Status change not confirmed. Retry the same action.');
-      localStorage.removeItem(key);
+      window.DraftVault.removeItem(key);
       if (epoch === workspaceEpoch && state) { showToast('Status change confirmed.'); await fetchPastInvoices(); }
       return;
     }
@@ -1463,12 +1490,12 @@ async function handleHistoryAction(event) {
       const number = prompt('New invoice number for this correction (must be unique):');
       const reason = prompt('Reason for correction:');
       if (!number?.trim() || !reason?.trim() || !confirm('This older record lacks complete billing metadata. Create an empty linked draft and enter its missing details manually?')) return;
-      if (!archiveCurrentDraft()) return;
+      if (!await archiveCurrentDraft()) return;
       replacing = true;
       state = { ...state, bill: { ...state.bill, invoiceNo: number.trim(), shipperCode: invoice.shipperCode, billTo: invoice.clientName || '', gstNo: invoice.clientGst || '' },
         shipments: [], correctionOf: invoice.invoiceNumber, correctionReason: reason.trim(), invoiceMetadata: { client: null, notes: invoice.notes || '' } };
       delete state.persistence;
-      if (!saveState()) throw new Error('Could not store the correction draft locally. The current draft is preserved.');
+      if (!await saveEncryptedState()) throw new Error('Could not store the correction draft locally. The current draft is preserved.');
       replacing = false;
       init(false); switchScreen('invoice'); showToast('Linked correction draft created. Complete and verify its details before finalizing.'); return;
     }
@@ -1479,7 +1506,7 @@ async function handleHistoryAction(event) {
       reason = prompt('Reason for correction:');
       if (!correctedNumber?.trim() || !reason?.trim()) return;
     }
-    if (!archiveCurrentDraft()) return;
+    if (!await archiveCurrentDraft()) return;
     replacing = true;
     state = { bill: structuredClone(invoice.snapshot.bill), rates: structuredClone(invoice.snapshot.rates), shipments: invoice.shipments.map((s) => ({
       id: s.sourceId || crypto.randomUUID(), cno: s.awb, date: s.bookingDate.slice(0, 10), destination: s.destination, origin: s.origin,
@@ -1493,7 +1520,7 @@ async function handleHistoryAction(event) {
     }
     if (epoch !== workspaceEpoch || !state) return;
     historicalRecord = action === 'correct' ? null : invoice;
-    if (!saveState(false)) throw new Error('Could not store this recovered draft locally. The previous draft is preserved.');
+    if (!await saveEncryptedState(false)) throw new Error('Could not store this recovered draft locally. The previous draft is preserved.');
     replacing = false;
     init(false); switchScreen('invoice');
   } catch (error) {

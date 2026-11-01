@@ -5,6 +5,7 @@ const path = require('node:path');
 const { validateEnv, validatePort } = require('../config/env');
 
 const valid = { MONGO_URI: 'mongodb://127.0.0.1:27017/test', ADMIN_USERNAME: 'test-admin',
+  BROWSER_DRAFT_KEY: Buffer.alloc(32, 7).toString('base64'),
   ADMIN_PASSWORD_HASH: 'scrypt$131072$8$1$' + 'a'.repeat(32) + '$' + 'b'.repeat(128),
   SESSION_SECRET: 'synthetic-session-secret-for-tests-only-123456789' };
 

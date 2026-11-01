@@ -1,5 +1,10 @@
 # Phase 1: single-operator security
 
+Phase 5 adds the required independent BROWSER_DRAFT_KEY and an authenticated,
+CSRF-protected `/api/privacy/draft-key` POST. Cookie sessions and authentication are
+unchanged. Browser storage is now encrypted; earlier plaintext-draft limitations
+below are superseded by [the privacy and key-recovery guide](browser-data-privacy.md).
+
 Phase 3 now adds [shared financial verification](billing-calculation-contract.md)
 without changing these authentication, CSRF or session protections. Mathematical
 verification does not certify legal tax classification or operator-approved rates.

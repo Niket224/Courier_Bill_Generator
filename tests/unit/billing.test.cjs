@@ -7,7 +7,7 @@ const fixture = require('../fixtures/bill.json');
 
 function browserLogic() {
   const context = vm.createContext({
-    structuredClone, window: { CourierBilling: require('../../mobile-bill-app/billing'), location: { hostname: 'localhost' }, crypto: { randomUUID: () => 'test-id' }, addEventListener() {}, CourierAuth: { isAuthenticated: () => true } },
+    structuredClone, window: { BrowserData: require('../../mobile-bill-app/browser-data'), DraftVault: { getItem: () => JSON.stringify(fixture) }, CourierBilling: require('../../mobile-bill-app/billing'), location: { hostname: 'localhost' }, crypto: { randomUUID: () => 'test-id' }, addEventListener() {}, CourierAuth: { isAuthenticated: () => true } },
     localStorage: { getItem: () => JSON.stringify(fixture) },
     document: { getElementById: () => null, querySelector: () => null }
   });

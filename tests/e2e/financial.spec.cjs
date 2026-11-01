@@ -20,7 +20,7 @@ test.beforeEach(async ({ page, context }, info) => {
   data.rates.push({ id: 'second-rate', client: shipper, destination: 'RANCHI', baseKg: 2, baseRate: 60, perKgRate: 20 });
   await context.addInitScript((value) => {
     if (location.origin !== 'http://127.0.0.1:4187') return;
-    localStorage.setItem('courier-bill-app-v2', JSON.stringify(value));
+    if (!localStorage.getItem('courier-bill-app-v2.sealed-v1')) localStorage.setItem('courier-bill-app-v2', JSON.stringify(value));
     window.print = () => { window.printCalls = (window.printCalls || 0) + 1; window.printedText = document.getElementById('invoicePaper').textContent; };
   }, data);
   await context.route('**/*', async (route) => {
@@ -119,7 +119,7 @@ test('G: backend unavailability retains draft and blocks verified final printing
   await context.route('**/api/invoices/save', (route) => route.abort('internetdisconnected'));
   await page.locator('#printButton').click();
   await expect(page.locator('#invoiceSaveState')).toHaveText('Offline');
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('courier-bill-app-v2')).shipments.length)).toBe(1);
+  expect(await page.evaluate(() => JSON.parse(window.DraftVault.getItem('courier-bill-app-v2')).shipments.length)).toBe(1);
   expect(await page.evaluate(() => window.printCalls || 0)).toBe(0);
 });
 test('H: manual override is the complete row total and is recorded explicitly', async ({ page }) => {

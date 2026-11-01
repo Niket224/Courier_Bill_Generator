@@ -8,12 +8,13 @@ function receipt(payload) {
 }
 test.beforeEach(async ({ context }) => {
   await context.addInitScript((data) => {
-    if (!localStorage.getItem('courier-bill-app-v2')) localStorage.setItem('courier-bill-app-v2', JSON.stringify(data));
+    if (!localStorage.getItem('courier-bill-app-v2') && !localStorage.getItem('courier-bill-app-v2.sealed-v1')) localStorage.setItem('courier-bill-app-v2', JSON.stringify(data));
     window.print = () => { window.printCalls = (window.printCalls || 0) + 1; };
   }, fixture);
   await context.route('**/*', (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === '/api/auth/session') return route.fulfill({ json: { authenticated: true, csrfToken: 'a'.repeat(64), expiresAt: Date.now() + 600000 } });
+    if (url.pathname === '/api/privacy/draft-key') return route.fulfill({ json: { success: true, key: Buffer.alloc(32, 7).toString('base64') } });
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: { success: true, data: [] } });
     return url.origin === 'http://127.0.0.1:4187' ? route.continue() : route.abort();
   });
@@ -35,7 +36,7 @@ for (const [label, status, body] of [
     await page.locator('#printButton').click();
     await expect(page.locator('#invoiceSaveState')).toHaveText('Failed to save');
     expect(await page.evaluate(() => window.printCalls || 0)).toBe(0);
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('courier-bill-app-v2')).shipments[0].cno)).toBe('TEST001');
+    expect(await page.evaluate(() => JSON.parse(window.DraftVault.getItem('courier-bill-app-v2')).shipments[0].cno)).toBe('TEST001');
   });
 }
 test('duplicate save clicks share one request and printing waits for confirmation', async ({ page }) => {
@@ -63,7 +64,7 @@ test('timeout is explicit and retains a stable retry request', async ({ page }) 
   await page.clock.fastForward(16000);
   await expect(page.locator('#invoiceSaveState')).toHaveText('Failed to save');
   await expect(page.locator('#invoiceSaveMessage')).toContainText('timed out');
-  expect(await page.evaluate(() => !!JSON.parse(localStorage.getItem('courier-bill-app-v2')).persistence.pending.payload.requestId)).toBe(true);
+  expect(await page.evaluate(() => !!JSON.parse(window.DraftVault.getItem('courier-bill-app-v2')).persistence.pending.payload.requestId)).toBe(true);
   expect(await page.evaluate(() => window.printCalls || 0)).toBe(0);
   await pending.abort().catch(() => {});
 });
@@ -96,7 +97,8 @@ test('refresh preserves unsaved edits and New Bill archives the old work', async
   page.on('dialog', (dialog) => dialog.accept());
   await page.locator('#newBillButton').click();
   await expect(page.locator('.shipment-card')).toHaveCount(0);
-  const archive = await page.evaluate(() => JSON.parse(localStorage.getItem(Object.keys(localStorage).find((key) => key.startsWith('courier-bill-archive-')))));
+  const archiveName = await page.evaluate(() => Object.keys(localStorage).find(key => key.startsWith('courier-bill-archive-')).replace('.sealed-v1', ''));
+  const archive = await require('../fixtures/read-vault.cjs')(page, archiveName);
   expect(archive.state.shipments[0].weight).toBe('4.5'); expect(archive.state.bill.invoiceNo).toBe('100/2026');
   await page.locator('button[data-target="tools"]').click();
   await page.locator('#restoreArchiveButton').click();
@@ -111,7 +113,7 @@ test('session expiry during save clears private DOM and keeps the retry draft', 
   await expect(page.locator('#invoicePaper')).toBeEmpty();
   expect(await page.evaluate(() => state)).toBeNull();
   expect(await page.evaluate(() => document.body.textContent.includes('TEST001'))).toBe(false);
-  expect(await page.evaluate(() => !!JSON.parse(localStorage.getItem('courier-bill-app-v2')).persistence.pending)).toBe(true);
+  expect(!!(await require('../fixtures/read-vault.cjs')(page)).persistence.pending).toBe(true);
   expect(await page.evaluate(() => window.printCalls || 0)).toBe(0);
 });
 test('logout removes draft and open review data from DOM, not just navigation', async ({ page }) => {
@@ -125,7 +127,7 @@ test('logout removes draft and open review data from DOM, not just navigation', 
   expect(await page.evaluate(() => state)).toBeNull();
   await page.evaluate(() => { document.querySelector('.app-shell').hidden = false; });
   expect(await page.evaluate(() => document.body.textContent.includes('TEST001'))).toBe(false);
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('courier-bill-app-v2')).shipments[0].cno)).toBe('TEST001');
+  expect((await require('../fixtures/read-vault.cjs')(page)).shipments[0].cno).toBe('TEST001');
 });
 test('incomplete invoice validation blocks requests and final printing', async ({ page }) => {
   let calls = 0;
@@ -163,7 +165,7 @@ test('corrupt local draft is retained and offered for recovery after authenticat
   await page.addInitScript(() => localStorage.setItem('courier-bill-app-v2', '{synthetic-corrupt-draft'));
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Download draft for recovery' })).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem('courier-bill-app-v2'))).toBe('{synthetic-corrupt-draft');
+  expect(await page.evaluate(() => window.DraftVault.getItem('courier-bill-app-v2'))).toBe('{synthetic-corrupt-draft');
   expect(await page.evaluate(() => state)).toBeNull();
 });
 test('a cross-tab draft change archives this tab instead of silently overwriting the other draft', async ({ page }) => {

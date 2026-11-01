@@ -16,7 +16,7 @@ test.beforeEach(async ({ page, context }, info) => {
   const data = structuredClone(fixture); data.bill.shipperCode = `REVIEW-${id}`; data.bill.invoiceNo = `REVIEW-${id}`; data.rates[0].client = data.bill.shipperCode;
   await context.addInitScript(value => {
     if (location.origin !== 'http://127.0.0.1:4187') return;
-    if (!localStorage.getItem('courier-bill-app-v2')) localStorage.setItem('courier-bill-app-v2', JSON.stringify(value));
+    if (!localStorage.getItem('courier-bill-app-v2') && !localStorage.getItem('courier-bill-app-v2.sealed-v1')) localStorage.setItem('courier-bill-app-v2', JSON.stringify(value));
     window.print = () => { window.printCalls = (window.printCalls || 0) + 1; };
   }, data);
   await context.route('**/*', async route => {

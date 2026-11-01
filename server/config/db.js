@@ -15,6 +15,7 @@ const connectDB = async () => {
     }
 
     const conn = await mongoose.connect(connString);
+    await require('../services/businessRecovery').assertRecoveredDatabase(conn.connection.db);
 
     console.log(`MongoDB Connected: ${conn.connection.host}`);
 

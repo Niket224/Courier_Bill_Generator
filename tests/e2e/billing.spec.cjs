@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 const fixture = require('../fixtures/bill.json');
 test.beforeEach(async ({ context }) => {
   await context.addInitScript((data) => {
-    if (!localStorage.getItem('courier-bill-app-v2')) localStorage.setItem('courier-bill-app-v2', JSON.stringify(data));
+    if (!localStorage.getItem('courier-bill-app-v2') && !localStorage.getItem('courier-bill-app-v2.sealed-v1')) localStorage.setItem('courier-bill-app-v2', JSON.stringify(data));
   }, fixture);
   // Block real API and external traffic, including localhost:5000.
   await context.route('**/*', async (route) => {
@@ -10,6 +10,7 @@ test.beforeEach(async ({ context }) => {
     if (url.pathname === '/api/auth/session') return route.fulfill({ json: {
       authenticated: true, csrfToken: 'a'.repeat(64), expiresAt: Date.now() + 600000
     } });
+    if (url.pathname === '/api/privacy/draft-key') return route.fulfill({ json: { success: true, key: Buffer.alloc(32, 7).toString('base64') } });
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: { success: true, data: [], count: 0 } });
     if (url.origin === 'http://127.0.0.1:4187') return route.continue();
     return route.abort();
