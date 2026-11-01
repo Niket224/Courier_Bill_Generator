@@ -1,0 +1,11 @@
+{
+  "bill": {
+    "businessName": "Test Courier", "courierBrand": "Test Delivery", "businessAddress": "Test Address",
+    "mobileNo": "0000000000", "sacCode": "", "billTo": "Synthetic Customer", "billAddress": "Test City",
+    "gstNo": "", "branchCode": "TEST", "shipperCode": "TEST", "invoiceNo": "100/2026",
+    "invoiceDate": "2026-01-01", "periodStart": "2026-01-01", "periodEnd": "2026-01-31",
+    "fuelPct": 20, "cgstPct": 9, "sgstPct": 9, "logoSrc": "none", "signatureSrc": ""
+  },
+  "rates": [{ "id": "rate-test", "client": "TEST", "destination": "PATNA", "baseKg": 3, "baseRate": 45, "perKgRate": 15 }],
+  "shipments": [{ "id": "shipment-test", "cno": "TEST001", "date": "2026-01-02", "destination": "PATNA", "type": "D", "pcs": 1, "weight": 1, "manualAmount": "" }]
+}

@@ -5,6 +5,9 @@ const mongoose = require('mongoose');
  * @returns {Promise<typeof mongoose>}
  */
 const connectDB = async () => {
+  if (process.env.NODE_ENV === 'test') {
+    throw new Error('Production database connector is disabled in test mode. Use the isolated test harness.');
+  }
   try {
     const connString = process.env.MONGO_URI;
     if (!connString) {
@@ -16,7 +19,7 @@ const connectDB = async () => {
     console.log(`MongoDB Connected: ${conn.connection.host}`);
 
     mongoose.connection.on('error', (err) => {
-      console.error(`MongoDB connection error: ${err.message}`);
+      console.error('MongoDB connection error. Check database availability and credentials.');
     });
 
     mongoose.connection.on('disconnected', () => {
@@ -25,8 +28,7 @@ const connectDB = async () => {
 
     return conn;
   } catch (error) {
-    console.error(`Error connecting to MongoDB: ${error.message}`);
-    process.exit(1);
+    throw new Error('Unable to connect to MongoDB. Check MONGO_URI and database availability.');
   }
 };
 

@@ -2,10 +2,11 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import envValidation from "../server/config/env.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..", "mobile-bill-app");
-const port = Number(process.env.PORT || 4173);
+const port = envValidation.validatePort(process.env.PORT, 4173);
 
 const mimeTypes = new Map([
   [".css", "text/css; charset=utf-8"],

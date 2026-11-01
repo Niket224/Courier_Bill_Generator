@@ -5,7 +5,12 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "npm --prefix .. test",
+    "test:unit": "npm --prefix .. run test:unit",
+    "test:integration": "npm --prefix .. run test:integration",
+    "test:e2e": "npm --prefix .. run test:e2e",
+    "test:coverage": "npm --prefix .. run test:coverage"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",

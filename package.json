@@ -3,6 +3,16 @@
   "version": "1.0.0",
   "description": "Courier Bill Generator and Mobile Billing App",
   "scripts": {
-    "dev": "node scripts/serve_mobile_app.mjs"
+    "dev": "node scripts/serve_mobile_app.mjs",
+    "test": "npm run test:unit && npm run test:integration && npm run test:e2e",
+    "test:unit": "node scripts/run-tests.mjs unit",
+    "test:integration": "node scripts/run-tests.mjs integration",
+    "test:e2e": "node scripts/qa_mobile_app.mjs",
+    "test:coverage": "node scripts/run-tests.mjs coverage"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "mongodb-memory-server": "11.3.0",
+    "supertest": "7.3.1"
   }
 }
