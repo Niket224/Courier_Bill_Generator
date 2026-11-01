@@ -9,6 +9,7 @@ const request = require('supertest');
 const { createApp } = require('../../app');
 const Rate = require('../../models/Rate');
 const Invoice = require('../../models/Invoice');
+const rateFixtures = require('../../../tests/fixtures/rate-card.cjs');
 const { createSessionStore } = require('../../security/store');
 const { authConfig, password } = require('../../../tests/fixtures/auth.cjs');
 let app, store, config, agent, csrfToken;
@@ -53,9 +54,9 @@ test('health, missing route, and input validation', async () => {
   await api.post('/api/invoices/save').send({}).expect(400);
   await api.post('/api/rates/parse-pdf').expect(400);
 });
-test('rate upsert, fallback priority, minimum weight and rounding', async () => {
+test('legacy rate reads, fallback priority, minimum weight and rounding', async () => {
   for (const [targetType, targetName, perKgRate] of [['DEFAULT', 'default', 50], ['REGION', 'east_india', 40], ['STATE', 'bihar', 30], ['CITY', 'patna', 15.25]]) {
-    await api.post('/api/rates').send({ shipperCode: 'TEST', baseKg: 3, targetType, targetName, perKgRate }).expect(201);
+    await Rate.create({ shipperCode: 'TEST', baseKg: 3, targetType, targetName, perKgRate });
   }
   for (const [destination, rule, amount] of [[' patna ', 'CITY', 45.75], ['gaya', 'STATE', 90], ['ranchi', 'REGION', 120], ['unknown', 'DEFAULT', 150]]) {
     const result = await api.post('/api/rates/calculate').send({ shipperCode: ' test ', destination, weight: 1 }).expect(200);
@@ -65,13 +66,13 @@ test('rate upsert, fallback priority, minimum weight and rounding', async () => 
   }
   const excess = await api.post('/api/rates/calculate').send({ shipperCode: 'TEST', destination: 'patna', weight: 3.333 }).expect(200);
   assert.equal(excess.body.calculatedAmount, 50.83);
-  await api.post('/api/rates').send({ shipperCode: 'TEST', targetType: 'CITY', targetName: 'patna', perKgRate: 16, baseKg: 3 }).expect(201);
+  await Rate.updateOne({ shipperCode: 'TEST', targetType: 'CITY', targetName: 'patna' }, { perKgRate: 16 }); // isolated legacy fixture only
   assert.equal((await api.get('/api/rates?shipperCode=test').expect(200)).body.count, 4);
   await api.post('/api/rates/calculate').send({ shipperCode: 'MISSING', destination: 'patna', weight: 1 }).expect(404);
 });
 test('invoice computation, controlled lifecycle, pagination, search and retrieval', async () => {
   const payload = { requestId: randomUUID(), expectedVersion: 0, status: 'GENERATED', invoiceNumber: ' test-100 ', shipperCode: ' test ', clientName: 'Synthetic Customer',
-    invoiceDate: '2026-01-02', shipments: [{ cno: 'TEST-AWB', date: '2026-01-02', weight: 2, amount: 100 }] };
+    subtotal: 100, taxRate: 18, taxAmount: 18, totalAmount: 118, tax: { mode: 'SPLIT', cgstPct: 9, sgstPct: 9 }, invoiceDate: '2026-01-02', shipments: [{ cno: 'TEST-AWB', date: '2026-01-02', weight: 2, manualAmount: 100, amount: 100 }] };
   const saved = await api.post('/api/invoices/save').send(payload).expect(201);
   assert.equal(saved.body.data.invoiceNumber, 'TEST-100');
   assert.equal(saved.body.data.subtotal, 100);
@@ -89,8 +90,8 @@ test('invoice computation, controlled lifecycle, pagination, search and retrieva
   await api.get('/api/invoices/MISSING').expect(404);
 });
 
-function fresh(overrides = {}, limits = {}) {
-  return createApp({ ...config, ...overrides }, { sessionStore: store, limits });
+function fresh(overrides = {}, limits = {}, ai = {}) {
+  return createApp({ ...config, ...overrides }, { sessionStore: store, limits, ...ai });
 }
 async function signIn(target = fresh(), credentials = { username: 'test-admin', password }) {
   const client = request.agent(target);
@@ -247,44 +248,29 @@ test('upgraded upload middleware rejects excess files and oversized PDF safely',
     .attach('pdf', Buffer.alloc(10 * 1024 * 1024 + 1), 'large.pdf').expect(400);
 });
 test('Gemini failures never leak provider credentials or documents', async (context) => {
-  const { GoogleGenerativeAI } = require('../../node_modules/@google/generative-ai');
   const sentinel = 'synthetic-provider-secret-and-customer-document';
   const messages = [];
-  context.mock.method(console, 'error', (...args) => messages.push(args.join(' ')));
-  context.mock.method(console, 'warn', (...args) => messages.push(args.join(' ')));
-  context.mock.method(console, 'log', (...args) => messages.push(args.join(' ')));
-  context.mock.method(GoogleGenerativeAI.prototype, 'getGenerativeModel', () => ({ generateContent: async () => { throw new Error(sentinel); } }));
-  const original = process.env.GEMINI_API_KEY;
-  process.env.GEMINI_API_KEY = 'synthetic-key-not-real';
-  try {
-    const { client, token } = await signIn();
-    const response = await client.post('/api/rates/parse-pdf').set('X-CSRF-Token', token)
-      .attach('pdf', Buffer.from('%PDF synthetic fixture'), 'test.pdf').expect(500);
-    assert.ok(!JSON.stringify(response.body).includes(sentinel));
-    assert.ok(!messages.join(' ').includes(sentinel));
-  } finally { if (original === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = original; }
+  for (const method of ['error', 'log', 'warn']) context.mock.method(console, method, (...args) => messages.push(args.join(' ')));
+  const { client, token } = await signIn(fresh({}, {}, { aiProvider: async () => { throw new Error(sentinel); }, aiOptions: { retries: 0 } }));
+  const response = await client.post('/api/rates/parse-pdf').set('X-CSRF-Token', token)
+    .attach('pdf', await rateFixtures.pdf(), 'test.pdf').expect(502);
+  assert.ok(!JSON.stringify(response.body).includes(sentinel));
+  assert.ok(!messages.join(' ').includes(sentinel));
 });
 test('invalid Gemini output is redacted, and synthetic valid PDF extraction still works', async (context) => {
-  const { GoogleGenerativeAI } = require('../../node_modules/@google/generative-ai');
   const logs = [];
   for (const method of ['error', 'log', 'warn']) context.mock.method(console, method, (...args) => logs.push(args.join(' ')));
   let output = 'synthetic-private-document-invalid-json';
-  context.mock.method(GoogleGenerativeAI.prototype, 'getGenerativeModel', () => ({
-    generateContent: async () => ({ response: { text: () => output } })
-  }));
-  const original = process.env.GEMINI_API_KEY;
-  process.env.GEMINI_API_KEY = 'synthetic-key-not-real';
-  try {
-    const { client, token } = await signIn();
-    const send = () => client.post('/api/rates/parse-pdf').set('X-CSRF-Token', token).attach('pdf', Buffer.from('%PDF synthetic fixture'), 'test.pdf');
-    const invalid = await send().expect(422);
-    assert.equal(invalid.body.rawOutput, undefined);
-    assert.ok(!JSON.stringify(invalid.body).includes(output));
-    assert.ok(!logs.join(' ').includes(output));
-    output = JSON.stringify({ clientInfo: { clientName: 'Synthetic Customer' }, rates: [{ targetName: 'patna', targetType: 'CITY', baseKg: 3, perKgRate: 15 }] });
-    const valid = await send().expect(200);
-    assert.equal(valid.body.data.rates[0].perKgRate, 15);
-  } finally { if (original === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = original; }
+  const { client, token } = await signIn(fresh({}, {}, { aiProvider: async () => output }));
+  const bytes = await rateFixtures.pdf();
+  const send = () => client.post('/api/rates/parse-pdf').set('X-CSRF-Token', token).attach('pdf', bytes, 'test.pdf');
+  const invalid = await send().expect(422);
+  assert.equal(invalid.body.rawOutput, undefined);
+  assert.ok(!JSON.stringify(invalid.body).includes(output));
+  assert.ok(!logs.join(' ').includes(output));
+  output = JSON.stringify(rateFixtures.card());
+  const valid = await send().expect(200);
+  assert.equal(valid.body.data.rates[0].perKgRate, 15);
 });
 test('session store failures fail closed with a generic API error', async (context) => {
   const { response } = await signIn();
@@ -297,7 +283,7 @@ test('session store failures fail closed with a generic API error', async (conte
 function invoiceInput(patch = {}) {
   return { requestId: randomUUID(), expectedVersion: 0, invoiceNumber: `TEST-${randomUUID()}`, shipperCode: 'TEST',
     invoiceDate: '2026-01-02', clientName: 'Synthetic Customer', status: 'DRAFT',
-    shipments: [{ awb: 'TEST-AWB', bookingDate: '2026-01-02', destination: 'PATNA', weight: 2, amount: 100 }], ...patch };
+    subtotal: 100, taxRate: 18, taxAmount: 18, totalAmount: 118, tax: { mode: 'SPLIT', cgstPct: 9, sgstPct: 9 }, shipments: [{ awb: 'TEST-AWB', bookingDate: '2026-01-02', destination: 'PATNA', weight: 2, manualAmount: 100, amount: 100 }], ...patch };
 }
 test('identical concurrent saves are idempotent and create exactly one invoice', async () => {
   const input = invoiceInput();
@@ -377,12 +363,13 @@ test('invalid fields and failed updates leave invoice data unchanged', async (co
   assert.deepEqual(await Invoice.findById(before._id).lean(), before);
 });
 test('complete metadata and shipment snapshot survives persistence without repricing', async () => {
+  await rateFixtures.publishFixture(rateFixtures.card());
   const adapter = require('../../../mobile-bill-app/persistence');
   const fixture = structuredClone(require('../../../tests/fixtures/bill.json'));
   fixture.bill.invoiceNo = 'SNAPSHOT-TEST';
   const payload = adapter.payload(fixture, 'GENERATED', () => ({ status: 'ok', amount: 45 }), () => ({ gross: 45, fuel: 9, subtotal: 54, cgst: 4.86, sgst: 4.86, final: 63.72 }));
   const saved = await api.post('/api/invoices/save').send({ ...payload, requestId: randomUUID(), expectedVersion: 0 }).expect(201);
-  assert.equal(saved.body.data.totalsVerified, false); assert.equal(saved.body.data.calculationContract, 'browser-v1-unverified');
+  assert.equal(saved.body.data.totalsVerified, true); assert.equal(saved.body.data.calculationContract, 'courier-v1');
   assert.equal(saved.body.data.reconstructionComplete, true);
   assert.deepEqual(saved.body.data.snapshot, payload.snapshot);
   assert.equal(saved.body.data.shipments[0].pcs, 1); assert.equal(saved.body.data.shipments[0].rateSnapshot.baseRate, 45);
@@ -397,6 +384,7 @@ test('history lists stay lightweight while detail preserves reconstruction data'
   const list = await api.get('/api/invoices?limit=100').expect(200);
   const snapshot = list.body.data.find((item) => item.invoiceNumber === 'SNAPSHOT-TEST');
   assert.equal(snapshot.snapshot, undefined); assert.equal(snapshot.operations, undefined);
+  assert.equal(snapshot.calculationSnapshot, undefined);
   const detail = await api.get(`/api/invoices/${snapshot._id}`).expect(200);
   assert.equal(detail.body.data.snapshot.totals.final, 63.72);
   assert.equal(detail.body.data.operations.length, 1);
@@ -419,6 +407,234 @@ test('concurrent lifecycle retries append only one audit operation', async () =>
   const other = await api.post('/api/invoices/save').send(invoiceInput({ status: 'GENERATED' })).expect(201);
   await api.post(`/api/invoices/${other.body.data._id}/status`).send(body).expect(409);
   assert.equal((await Invoice.findById(other.body.data._id)).status, 'GENERATED');
+});
+async function financialCard(baseRate = 45) {
+  return rateFixtures.publishFixture(rateFixtures.card('BILLING-TEST', [{ targetName: 'patna', targetType: 'CITY', baseKg: 3, baseRate, perKgRate: 15 }]));
+}
+function financialInput(patch = {}) {
+  return { requestId: randomUUID(), expectedVersion: 0, invoiceNumber: `FIN-${randomUUID()}`, shipperCode: 'BILLING-TEST', clientName: 'Synthetic Customer', invoiceDate: '2026-01-02',
+    status: 'GENERATED', tax: { mode: 'SPLIT', fuelPct: 20, cgstPct: 9, sgstPct: 9, igstPct: 0 },
+    shipments: [{ awb: 'FIN-AWB', bookingDate: '2026-01-02', destination: 'PATNA', actualWeight: 1, pcs: 1, amount: 45 }],
+    subtotal: 54, taxRate: 18, taxAmount: 9.72, totalAmount: 63.72, ...patch };
+}
+test('server independently verifies new final invoices using published base-charge cards', async () => {
+  await financialCard();
+  const saved = await api.post('/api/invoices/save').send(financialInput()).expect(201);
+  assert.equal(saved.body.data.totalsVerified, true); assert.equal(saved.body.data.schemaVersion, 3);
+  assert.equal(saved.body.data.calculationSnapshot.paise.final, 6372);
+  assert.equal(saved.body.data.calculationSnapshot.appliedRates[0].rate.baseRate, 45);
+  assert.equal(saved.body.data.calculationSnapshot.amountWords, 'SIXTY THREE AND SEVENTY TWO PAISE');
+});
+for (const field of ['subtotal', 'taxAmount', 'totalAmount']) {
+  test(`tampered ${field} cannot be finalized`, async () => {
+    await financialCard();
+    const body = financialInput({ [field]: 1 });
+    const response = await api.post('/api/invoices/save').send(body).expect(422);
+    assert.equal(response.body.code, 'CALCULATION_MISMATCH');
+    assert.ok(response.body.reconciliation.mismatches.some((item) => item.field === field));
+    assert.equal(await Invoice.countDocuments({ invoiceNumber: body.invoiceNumber }), 0);
+  });
+}
+test('tampered shipment amount, missing rate and malformed monetary values are rejected', async () => {
+  await financialCard();
+  const bad = financialInput(); bad.shipments[0].amount = 1;
+  await api.post('/api/invoices/save').send(bad).expect(422);
+  const rateTamper = financialInput(); rateTamper.shipments[0].rateSnapshot = { baseKg: 3, baseRate: 999, perKgRate: 15 };
+  await api.post('/api/invoices/save').send(rateTamper).expect(422);
+  const missing = financialInput(); missing.shipments[0].destination = 'UNKNOWN';
+  assert.equal((await api.post('/api/invoices/save').send(missing).expect(422)).body.code, 'RATE_REVIEW_REQUIRED');
+  await api.post('/api/invoices/save').send(financialInput({ totalAmount: '63.72' })).expect(400);
+});
+test('calculation endpoint requires authentication/CSRF and returns structured reconciliation', async () => {
+  await financialCard();
+  await request(app).post('/api/invoices/calculate').send(financialInput()).expect(401);
+  await agent.post('/api/invoices/calculate').send(financialInput()).expect(403);
+  const result = await api.post('/api/invoices/calculate').send(financialInput({ totalAmount: 1 })).expect(200);
+  assert.equal(result.body.calculation.totals.final, 63.72);
+  assert.equal(result.body.mismatches[0].field, 'totalAmount');
+});
+test('committed replay ignores new rates, edited idempotency payload fails, historical calculation is unchanged', async () => {
+  await financialCard();
+  const input = financialInput();
+  const created = await api.post('/api/invoices/save').send(input).expect(201);
+  const before = await Invoice.findById(created.body.data._id).lean();
+  await financialCard(99);
+  const replay = await api.post('/api/invoices/save').send(input).expect(200);
+  assert.equal(replay.body.replayed, true); assert.equal(replay.body.data.totalAmount, 63.72);
+  await api.post('/api/invoices/save').send({ ...input, totalAmount: 99 }).expect(409);
+  assert.deepEqual(await Invoice.findById(before._id).lean(), before);
+  const correction = financialInput({ correctionOf: input.invoiceNumber, correctionReason: 'Synthetic new-rate correction' });
+  await api.post('/api/invoices/save').send(correction).expect(422);
+  correction.shipments[0].amount = 99; correction.subtotal = 118.8; correction.taxAmount = 21.38; correction.totalAmount = 140.18;
+  const corrected = await api.post('/api/invoices/save').send(correction).expect(201);
+  assert.equal(corrected.body.data.calculationSnapshot.appliedRates[0].rate.baseRate, 99);
+  assert.deepEqual(await Invoice.findById(before._id).lean(), before);
+});
+test('IGST, no-tax and explicit manual totals are independently checked', async () => {
+  const input = financialInput({ tax: { mode: 'IGST', fuelPct: 20, igstPct: 18 }, taxRate: 18 });
+  input.shipments[0].manualAmount = 45;
+  const result = await api.post('/api/invoices/save').send(input).expect(201);
+  assert.equal(result.body.data.calculationSnapshot.paise.igst, 972);
+  assert.equal(result.body.data.calculationSnapshot.appliedRates[0].manualOverride, true);
+  await api.post('/api/invoices/save').send({ ...input, invoiceNumber: 'NONE-TEST', requestId: randomUUID(), tax: { mode: 'NONE', fuelPct: 20 }, taxRate: 0, taxAmount: 0, totalAmount: 54 }).expect(201);
+  await api.post('/api/invoices/save').send({ ...input, requestId: randomUUID(), invoiceNumber: 'BAD-TAX', tax: { mode: 'IGST', cgstPct: 9, igstPct: 18 } }).expect(400);
+});
+test('legacy base-charge omission is estimate-only and cannot certify a final invoice', async () => {
+  await Rate.create({ shipperCode: 'LEGACY-RATE', targetName: 'patna', targetType: 'CITY', baseKg: 3, perKgRate: 15 });
+  const estimate = await api.post('/api/rates/calculate').send({ shipperCode: 'LEGACY-RATE', destination: 'patna', weight: 1 }).expect(200);
+  assert.equal(estimate.body.calculatedAmount, 45); assert.equal(estimate.body.requiresRateReview, true);
+  await api.post('/api/rates/calculate').send({ shipperCode: 'LEGACY-RATE', destination: 'patna', weight: null }).expect(400);
+  await api.post('/api/rates/calculate').send({ shipperCode: 'LEGACY-RATE', destination: 'patna', weight: 1, pcs: null }).expect(400);
+  await api.post('/api/rates').send({ shipperCode: 'LEGACY-RATE', targetName: 'invalid', targetType: 'CITY', baseKg: null, baseRate: 0, perKgRate: 0 }).expect(400);
+  await api.post('/api/invoices/save').send(financialInput({ shipperCode: 'LEGACY-RATE' })).expect(422);
+});
+test('new finalizations cannot rely on legacy implicit claims or default tax assumptions', async () => {
+  const missing = financialInput(); delete missing.totalAmount;
+  await api.post('/api/invoices/save').send(missing).expect(400);
+  const noTax = financialInput(); delete noTax.tax;
+  assert.equal((await api.post('/api/invoices/save').send(noTax).expect(400)).body.code, 'TAX_CONFIGURATION_REQUIRED');
+  const noWeight = financialInput(); delete noWeight.shipments[0].actualWeight;
+  assert.equal((await api.post('/api/invoices/save').send(noWeight).expect(400)).body.code, 'SHIPMENT_WEIGHT_REQUIRED');
+});
+test('Phase 2 committed request IDs still replay without financial recertification', async () => {
+  const { validateInvoice, fingerprint } = require('../../services/invoiceValidation');
+  const input = invoiceInput({ status: 'GENERATED' }); delete input.tax;
+  const { data } = validateInvoice(input);
+  const old = await Invoice.create({ ...data, schemaVersion: 2, revision: 1, totalsVerified: false,
+    operations: [{ requestId: input.requestId, hash: fingerprint({ action: 'SAVE', expectedVersion: 0, data }), version: 1, action: 'SAVE', status: 'GENERATED' }] });
+  const replay = await api.post('/api/invoices/save').send(input).expect(200);
+  assert.equal(replay.body.data._id, String(old._id)); assert.equal(replay.body.data.totalsVerified, false);
+  await api.post('/api/invoices/save').send({ ...input, totalAmount: 1 }).expect(409);
+});
+const RateBook = require('../../models/RateBook');
+const RateDraft = require('../../models/RateCardDraft');
+const RateContract = require('../../../mobile-bill-app/rate-card');
+async function draftFor(card) {
+  return (await api.post('/api/rate-cards/drafts').send({ requestId: randomUUID(), expectedRevision: 0, card }).expect(200)).body.data;
+}
+function publication(draft, expectedRevision = 0) {
+  return { requestId: randomUUID(), shipperCode: draft.shipperCode, expectedRevision, draftId: draft._id, draftRevision: draft.revision, approved: true,
+    acknowledgedWarnings: RateContract.normalize(draft.card).warnings.map((warning) => warning.code) };
+}
+test('new rate-card endpoints require authentication, CSRF and explicit approval', async () => {
+  for (const path of ['/api/rate-cards/drafts', '/api/rate-cards/publish', '/api/rate-cards/rollback']) {
+    await request(app).post(path).send({}).expect(401);
+    await agent.post(path).send({}).expect(403);
+  }
+  const draft = await draftFor(rateFixtures.card('APPROVAL-TEST'));
+  await api.post('/api/rate-cards/publish').send({ ...publication(draft), approved: false }).expect(400);
+  await api.post('/api/rate-cards/publish').send({ ...publication(draft), acknowledgedWarnings: [] }).expect(400);
+  assert.equal(await RateBook.findById('APPROVAL-TEST'), null);
+});
+test('reviewed drafts save and update without changing active or legacy rates', async () => {
+  const card = rateFixtures.card('DRAFT-ONLY');
+  await Rate.create({ shipperCode: card.shipperCode, targetName: 'patna', targetType: 'CITY', baseKg: 3, baseRate: 999, perKgRate: 15 });
+  const draft = await draftFor(card);
+  card.rates[0].baseRate = 50;
+  const changed = await api.post('/api/rate-cards/drafts').send({ requestId: randomUUID(), draftId: draft._id, expectedRevision: 1, card }).expect(200);
+  assert.equal(changed.body.data.revision, 2);
+  assert.equal(await RateBook.findById(card.shipperCode), null);
+  assert.equal((await Rate.findOne({ shipperCode: card.shipperCode })).baseRate, 999);
+  await api.post('/api/rates').send({ shipperCode: card.shipperCode, targetName: 'patna', targetType: 'CITY', baseKg: 3, baseRate: 1, perKgRate: 0 }).expect(409);
+  assert.equal((await Rate.findOne({ shipperCode: card.shipperCode })).baseRate, 999);
+});
+test('publication is atomic, idempotent and switches all rates together', async () => {
+  const draft = await draftFor(rateFixtures.card('ATOMIC-CARD', [
+    { targetName: 'patna', targetType: 'CITY', baseKg: 3, baseRate: 45, perKgRate: 15 },
+    { targetName: 'ranchi', targetType: 'CITY', baseKg: 2, baseRate: 60, perKgRate: 20 }
+  ]));
+  const body = publication(draft);
+  const results = await Promise.all([api.post('/api/rate-cards/publish').send(body), api.post('/api/rate-cards/publish').send(body)]);
+  assert.deepEqual(results.map((r) => r.status), [200, 200]);
+  const book = await RateBook.findById(draft.shipperCode).lean(); assert.equal(book.versions.length, 1); assert.equal(book.operations.length, 1);
+  const rates = await api.get('/api/rates?shipperCode=ATOMIC-CARD').expect(200);
+  assert.equal(rates.body.data.length, 2); assert.ok(rates.body.data.every((r) => r.approved && r.publicationVersion === 1));
+  await api.post('/api/rate-cards/publish').send({ ...body, expectedRevision: 1 }).expect(409);
+});
+test('concurrent publications conflict instead of overwriting a winner', async () => {
+  const first = await draftFor(rateFixtures.card('RACE-CARD'));
+  const altered = structuredClone(first.card); altered.rates[0].baseRate = 70;
+  const second = await draftFor(altered);
+  const results = await Promise.all([api.post('/api/rate-cards/publish').send(publication(first)), api.post('/api/rate-cards/publish').send(publication(second))]);
+  assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
+  assert.equal((await RateBook.findById(first.shipperCode)).versions.length, 1);
+});
+test('publication database failure leaves the previously approved version unchanged', async (context) => {
+  const first = await draftFor(rateFixtures.card('FAILURE-CARD'));
+  await api.post('/api/rate-cards/publish').send(publication(first)).expect(200);
+  const next = structuredClone(first.card); next.rates[0].baseRate = 80;
+  const draft = await draftFor(next);
+  const before = await RateBook.findById(first.shipperCode).lean();
+  context.mock.method(RateBook, 'findOneAndUpdate', () => { throw new Error('synthetic database failure'); });
+  await api.post('/api/rate-cards/publish').send(publication(draft, 1)).expect(500);
+  assert.deepEqual(await RateBook.findById(first.shipperCode).lean(), before);
+});
+test('rollback creates a new approved version without changing historical invoices', async () => {
+  const shipper = 'ROLLBACK-CARD';
+  const first = await draftFor(rateFixtures.card(shipper));
+  await api.post('/api/rate-cards/publish').send(publication(first)).expect(200);
+  const input = financialInput({ shipperCode: shipper });
+  const saved = await api.post('/api/invoices/save').send(input).expect(201);
+  const oldInvoice = await Invoice.findById(saved.body.data._id).lean();
+  const revised = structuredClone(first.card); revised.rates[0].baseRate = 99;
+  const second = await draftFor(revised);
+  await api.post('/api/rate-cards/publish').send(publication(second, 1)).expect(200);
+  assert.equal((await api.post('/api/rates/calculate').send({ shipperCode: shipper, destination: 'patna', weight: 1 }).expect(200)).body.calculatedAmount, 99);
+  const body = { requestId: randomUUID(), shipperCode: shipper, expectedRevision: 2, sourceVersion: 1, approved: true };
+  await api.post('/api/rate-cards/rollback').send(body).expect(200);
+  await api.post('/api/rate-cards/rollback').send(body).expect(200);
+  const book = await RateBook.findById(shipper).lean(); assert.equal(book.versions.length, 3); assert.equal(book.activeVersion, 3);
+  assert.equal((await api.post('/api/rates/calculate').send({ shipperCode: shipper, destination: 'patna', weight: 1 }).expect(200)).body.calculatedAmount, 45);
+  assert.deepEqual(await Invoice.findById(oldInvoice._id).lean(), oldInvoice);
+});
+test('draft tampering, stale revisions and cross-shipper identifiers are rejected', async () => {
+  const draft = await draftFor(rateFixtures.card('IDENTITY-CARD'));
+  await api.get(`/api/rate-cards/drafts/${draft._id}?shipperCode=OTHER`).expect(404);
+  await api.post('/api/rate-cards/publish').send({ ...publication(draft), shipperCode: 'OTHER' }).expect(409);
+  const altered = structuredClone(draft.card); altered.rates[0].baseRate = null;
+  await api.post('/api/rate-cards/drafts').send({ requestId: randomUUID(), draftId: draft._id, expectedRevision: 1, card: altered }).expect(400);
+  await api.post('/api/rate-cards/drafts').send({ requestId: randomUUID(), draftId: draft._id, expectedRevision: 0, card: draft.card }).expect(409);
+  assert.equal((await RateDraft.findById(draft._id)).revision, 1);
+});
+test('fake signatures and corrupt PDFs never reach the provider', async () => {
+  let calls = 0;
+  const { client, token } = await signIn(fresh({}, {}, { aiProvider: async () => { calls++; return JSON.stringify(rateFixtures.card()); } }));
+  for (const bytes of [Buffer.from('not a PDF'), Buffer.from('%PDF-1.7 corrupt %%EOF'), Buffer.alloc(0)]) {
+    await client.post('/api/rates/parse-pdf').set('X-CSRF-Token', token).attach('pdf', bytes, { filename: 'fake.pdf', contentType: 'application/pdf' }).expect(400);
+  }
+  assert.equal(calls, 0);
+});
+test('parser timeout, service outage, credentials and quota return safe failures', async () => {
+  const bytes = await rateFixtures.pdf();
+  for (const [provider, expected, code] of [
+    [async () => new Promise(() => {}), 504, 'AI_TIMEOUT'],
+    [async () => { throw { status: 503, message: 'secret' }; }, 502, 'AI_UNAVAILABLE'],
+    [async () => { throw { status: 401, message: 'secret' }; }, 503, 'AI_CREDENTIALS'],
+    [async () => { throw { status: 429, message: 'secret' }; }, 429, 'AI_QUOTA']
+  ]) {
+    const { client, token } = await signIn(fresh({}, {}, { aiProvider: provider, aiOptions: { timeoutMs: 10, retries: 0, totalMs: 20 } }));
+    const result = await client.post('/api/rates/parse-pdf').set('X-CSRF-Token', token).attach('pdf', bytes, 'test.pdf').expect(expected);
+    assert.equal(result.body.code, code); assert.ok(!JSON.stringify(result.body).includes('secret'));
+  }
+});
+test('missing AI charges are unresolved, malformed fields are rejected, and neither changes rates', async () => {
+  const bytes = await rateFixtures.pdf(); const input = rateFixtures.card('AI-UNRESOLVED'); input.rates[0].baseRate = null;
+  let output = JSON.stringify(input);
+  const { client, token } = await signIn(fresh({}, {}, { aiProvider: async () => output }));
+  const send = () => client.post('/api/rates/parse-pdf').set('X-CSRF-Token', token).attach('pdf', bytes, 'test.pdf');
+  const unresolved = await send().expect(200); assert.equal(unresolved.body.complete, false); assert.equal(unresolved.body.data.rates[0].baseRate, null);
+  input.rates[0].baseCharge = 45; output = JSON.stringify(input);
+  await send().expect(422); assert.equal(await RateBook.findById(input.shipperCode), null);
+});
+test('only one PDF is admitted while a provider operation is in flight', async () => {
+  let started; const entered = new Promise((resolve) => { started = resolve; }); let release;
+  const provider = () => { started(); return new Promise((resolve) => { release = () => resolve(JSON.stringify(rateFixtures.card())); }); };
+  const { client, token } = await signIn(fresh({}, {}, { aiProvider: provider }));
+  const bytes = await rateFixtures.pdf();
+  const first = client.post('/api/rates/parse-pdf').set('X-CSRF-Token', token).attach('pdf', bytes, 'test.pdf').then((r) => r);
+  await entered;
+  await client.post('/api/rates/parse-pdf').set('X-CSRF-Token', token).attach('pdf', bytes, 'test.pdf').expect(429);
+  release(); assert.equal((await first).status, 200);
 });
 test('disconnected isolated database fails safely without buffering a write', async () => {
   const memory = new (require('../../node_modules/express-session').MemoryStore)();

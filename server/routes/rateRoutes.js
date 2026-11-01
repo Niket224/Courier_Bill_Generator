@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const Rate = require('../models/Rate');
+const { activeRates } = require('../services/rateCards');
 const locations = require('../data/locations.json');
+const Billing = require('../../mobile-bill-app/billing');
 
 /**
  * @route   POST /api/rates/calculate
@@ -28,7 +30,8 @@ router.post('/calculate', async (req, res, next) => {
 
     const normalizedShipper = shipperCode.trim().toUpperCase();
     const normalizedDest = destination.trim().toLowerCase();
-    const parsedWeight = Math.max(0, Number(weight) || 1);
+    const parsedWeight = weight === undefined ? 1 : weight;
+    Billing.decimal(parsedWeight, 'weight');
 
     // Look up destination info in locations.json
     const locationData = locations[normalizedDest];
@@ -36,63 +39,12 @@ router.post('/calculate', async (req, res, next) => {
     const state = locationData ? locationData.state.toLowerCase() : null;
     const region = locationData ? locationData.region.toLowerCase() : null;
 
-    let matchedRate = null;
-    let matchedRule = null;
-
-    // Step a: Exact CITY match
-    matchedRate = await Rate.findOne({
-      shipperCode: normalizedShipper,
-      targetType: 'CITY',
-      targetName: city
-    });
-
-    if (matchedRate) {
-      matchedRule = 'CITY';
-    }
-
-    // Step b: STATE match (or CUSTOM_ZONE)
-    if (!matchedRate && (state || city)) {
-      const searchStates = [state, city].filter(Boolean);
-      matchedRate = await Rate.findOne({
-        shipperCode: normalizedShipper,
-        targetType: { $in: ['STATE', 'CUSTOM_ZONE'] },
-        targetName: { $in: searchStates }
-      });
-
-      if (matchedRate) {
-        matchedRule = matchedRate.targetType;
-      }
-    }
-
-    // Step c: REGION match
-    if (!matchedRate && (region || city)) {
-      const searchRegions = [region, city].filter(Boolean);
-      matchedRate = await Rate.findOne({
-        shipperCode: normalizedShipper,
-        targetType: 'REGION',
-        targetName: { $in: searchRegions }
-      });
-
-      if (matchedRate) {
-        matchedRule = 'REGION';
-      }
-    }
-
-    // Step d: DEFAULT rate
-    if (!matchedRate) {
-      matchedRate = await Rate.findOne({
-        shipperCode: normalizedShipper,
-        $or: [
-          { targetType: 'DEFAULT' },
-          { targetName: 'default' }
-        ]
-      });
-
-      if (matchedRate) {
-        matchedRule = 'DEFAULT';
-      }
-    }
-
+    const cards = await activeRates(normalizedShipper, { allowLegacy: true });
+    let matchedRate = cards.find((r) => r.targetType === 'CITY' && r.targetName === city);
+    if (!matchedRate) matchedRate = cards.find((r) => ['STATE', 'CUSTOM_ZONE'].includes(r.targetType) && [state, city].includes(r.targetName));
+    if (!matchedRate) matchedRate = cards.find((r) => r.targetType === 'REGION' && [region, city].includes(r.targetName));
+    if (!matchedRate) matchedRate = cards.find((r) => r.targetType === 'DEFAULT' || r.targetName === 'default');
+    const matchedRule = matchedRate?.targetType;
     if (!matchedRate) {
       return res.status(404).json({
         success: false,
@@ -101,10 +53,11 @@ router.post('/calculate', async (req, res, next) => {
       });
     }
 
-    const baseKg = matchedRate.baseKg || 1;
+    const baseKg = matchedRate.baseKg ?? 1;
     const perKgRate = matchedRate.perKgRate;
-    const chargedWeight = Math.max(parsedWeight, baseKg);
-    const calculatedAmount = Math.round((chargedWeight * perKgRate + Number.EPSILON) * 100) / 100;
+    const chargedWeight = Math.max(Number(parsedWeight), baseKg);
+    const legacyBase = matchedRate.baseRate === undefined;
+    const calculatedAmount = Billing.shipment({ weight: parsedWeight, pcs: req.body.pcs === undefined ? 1 : req.body.pcs }, matchedRate, { legacyBase }).amount;
 
     return res.status(200).json({
       success: true,
@@ -123,12 +76,14 @@ router.post('/calculate', async (req, res, next) => {
         baseKg: matchedRate.baseKg,
         perKgRate: matchedRate.perKgRate
       },
-      inputWeight: parsedWeight,
+      inputWeight: Number(parsedWeight),
       chargedWeight,
-      calculatedAmount
+      calculatedAmount,
+      calculationContract: !matchedRate.approved ? 'legacy-rate-estimate' : Billing.VERSION, requiresRateReview: !matchedRate.approved || legacyBase
     });
 
   } catch (error) {
+    if (error.code === 'INVALID_CALCULATION') return res.status(400).json({ success: false, error: error.message });
     next(error);
   }
 });
@@ -145,7 +100,7 @@ router.get('/', async (req, res, next) => {
     if (shipperCode) {
       query.shipperCode = String(shipperCode).trim().toUpperCase();
     }
-    const rates = await Rate.find(query).sort({ shipperCode: 1, targetName: 1 });
+    const rates = shipperCode ? await activeRates(query.shipperCode, { allowLegacy: true }) : await Rate.find(query).sort({ shipperCode: 1, targetName: 1 });
     return res.status(200).json({
       success: true,
       count: rates.length,
@@ -163,9 +118,9 @@ router.get('/', async (req, res, next) => {
  */
 router.post('/', async (req, res, next) => {
   try {
-    const { shipperCode, targetName, targetType, baseKg, perKgRate } = req.body;
+    const { shipperCode, targetName, targetType, baseKg, perKgRate, baseRate } = req.body;
 
-    if (!shipperCode || !targetName || !targetType || perKgRate === undefined) {
+    if (typeof shipperCode !== 'string' || !shipperCode.trim() || typeof targetName !== 'string' || !targetName.trim() || typeof targetType !== 'string' || perKgRate === undefined) {
       return res.status(400).json({
         success: false,
         error: 'shipperCode, targetName, targetType, and perKgRate are required'
@@ -175,28 +130,17 @@ router.post('/', async (req, res, next) => {
     const normalizedShipper = shipperCode.trim().toUpperCase();
     const normalizedTarget = targetName.trim().toLowerCase();
     const normalizedType = targetType.trim().toUpperCase();
+    const requestedBaseKg = baseKg === undefined ? 1 : baseKg;
+    Billing.decimal(requestedBaseKg, 'base weight');
+    Billing.decimal(perKgRate, 'extra-weight rate');
+    if (baseRate !== undefined) Billing.decimal(baseRate, 'base charge');
+    for (const value of [requestedBaseKg, perKgRate, ...(baseRate !== undefined ? [baseRate] : [])]) {
+      if (Billing.decimal(value, 'rate precision') !== Billing.decimal(Number(value), 'rate precision')) return res.status(400).json({ success: false, error: 'Unsupported rate precision.' });
+    }
 
-    const rate = await Rate.findOneAndUpdate(
-      {
-        shipperCode: normalizedShipper,
-        targetName: normalizedTarget,
-        targetType: normalizedType
-      },
-      {
-        shipperCode: normalizedShipper,
-        targetName: normalizedTarget,
-        targetType: normalizedType,
-        baseKg: baseKg !== undefined ? Math.max(0, Number(baseKg)) : 1,
-        perKgRate: Math.max(0, Number(perKgRate))
-      },
-      { new: true, upsert: true, runValidators: true }
-    );
-
-    return res.status(201).json({
-      success: true,
-      data: rate
-    });
+    return res.status(409).json({ success: false, code: 'PUBLICATION_REQUIRED', error: 'Direct rate writes are disabled. Save a reviewed draft and explicitly publish it.' });
   } catch (error) {
+    if (error.code === 'INVALID_CALCULATION') return res.status(400).json({ success: false, error: error.message });
     next(error);
   }
 });

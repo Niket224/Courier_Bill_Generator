@@ -134,6 +134,8 @@
                 SGST %
                 <input id="sgstPct" type="number" inputmode="decimal" min="0" step="0.01" />
               </label>
+              <label>Tax mode<select id="taxMode"><option value="SPLIT">CGST + SGST</option><option value="IGST">IGST</option><option value="NONE">No tax</option></select></label>
+              <label>IGST %<input id="igstPct" type="number" min="0" step="0.01" /></label>
               <div class="span-2 form-upload-row">
                 <label class="upload-field">
                   Company Logo
@@ -226,6 +228,11 @@
                 Upload &amp; Extract Rates
               </button>
             </div>
+            <p id="pdfParseStatus" role="status" aria-live="polite">Choose a PDF for review. Active rates will not change.</p>
+            <button id="resumeRateReviewButton" class="secondary-button" type="button" hidden>Resume saved review</button>
+            <button id="loadRateDraftsButton" class="secondary-button" type="button">Load server drafts</button>
+            <select id="rateDraftSelect" aria-label="Server rate drafts"></select>
+            <button id="openRateDraftButton" class="secondary-button" type="button">Open selected draft</button>
             <div class="ai-loading" id="aiLoadingSpinner" hidden>
               <div class="spinner"></div>
               <span>Gemini AI PDF analyze kar raha hai... Extracted rates review modal mein khulenge.</span>
@@ -289,6 +296,9 @@
           <div class="persistence-panel" aria-live="polite">
             <strong id="invoiceSaveState">Unsaved</strong>
             <span id="invoiceSaveMessage">Save a draft or finalize before printing.</span>
+            <span>Provisional preview until server verification. Select tax treatment with your accountant.</span>
+            <button id="publishRatesButton" class="secondary-button" type="button">Review local rates</button>
+            <button id="loadPublishedRatesButton" class="secondary-button" type="button">Load published rates</button>
             <button id="saveDraftButton" class="secondary-button" type="button">Save draft</button>
             <button id="retrySaveButton" class="secondary-button" type="button" hidden>Retry save</button>
             <details><summary>Additional invoice details</summary>
@@ -410,12 +420,13 @@
         <div class="modal-header">
           <div>
             <h3>Review Extracted Rates &amp; Client Rules</h3>
-            <p class="modal-sub">Gemini AI extracted the following details. Edit any values before saving to Database.</p>
+            <p class="modal-sub">Review every value. Base charge is independent of base weight and extra-weight rate. Saving a draft never publishes it.</p>
           </div>
           <button class="close-button modal-close" id="closeReviewModal" type="button" aria-label="Close modal">&times;</button>
         </div>
         <div class="modal-body">
           <div class="review-info-grid">
+            <label>Shipper code<input id="reviewShipperCode" placeholder="Required identifier" /></label>
             <label>
               Client Name
               <input id="reviewClientName" placeholder="Client Name" />
@@ -437,6 +448,9 @@
               <input id="reviewFuelSurchargePct" type="number" step="0.01" placeholder="e.g. 15" />
             </label>
           </div>
+          <label>Global conditions<textarea id="reviewGlobalNotes" maxlength="2000"></textarea></label>
+          <p id="reviewStatus" role="status" aria-live="polite">Unsaved review</p>
+          <p id="reviewValidation" role="alert"></p>
 
           <div class="modal-table-wrap">
             <table class="modal-table">
@@ -445,7 +459,9 @@
                   <th>Target Name</th>
                   <th>Target Type</th>
                   <th>Base KG</th>
+                  <th>Base charge</th>
                   <th>Per KG Rate (Rs)</th>
+                  <th>Formula / conditions</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -455,17 +471,25 @@
           <button class="ghost-button btn-sm" id="addReviewRowButton" type="button" style="margin-top:10px;">+ Add Custom Row</button>
         </div>
         <div class="modal-footer">
+          <label><input id="reviewApproval" type="checkbox" /> I reviewed the charges, minimums, fuel reference, destination mapping and special-condition warnings. I explicitly approve publication.</label>
+          <button id="retryRateReviewButton" class="secondary-button" type="button" hidden>Retry pending request</button>
+          <button id="publishReviewedRatesButton" class="primary-button" type="button">Publish approved draft</button>
+          <label>Approved versions<select id="approvedRateVersion"></select></label>
+          <button id="rollbackRateVersionButton" class="secondary-button" type="button">Roll back to selected version</button>
           <button class="secondary-button modal-close" id="cancelReviewModal" type="button">Cancel</button>
           <button class="primary-button" id="saveReviewedRatesButton" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
-            Verify &amp; Save Rates
+            Save as draft
           </button>
         </div>
       </div>
     </div>
 
-    <script src="auth.js?v=2" defer></script>
-    <script src="persistence.js?v=1" defer></script>
-    <script src="app.js?v=7" defer></script>
+    <script src="billing.js?v=1" defer></script>
+    <script src="rate-card.js?v=1" defer></script>
+    <script src="rate-review.js?v=1" defer></script>
+    <script src="auth.js?v=3" defer></script>
+    <script src="persistence.js?v=2" defer></script>
+    <script src="app.js?v=9" defer></script>
   </body>
 </html>

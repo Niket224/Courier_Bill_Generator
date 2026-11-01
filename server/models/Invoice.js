@@ -8,6 +8,8 @@ const invoiceSchema = new mongoose.Schema(
     totalsVerified: { type: Boolean, default: false },
     reconstructionComplete: { type: Boolean, default: false },
     calculationContract: String,
+    calculationSnapshot: mongoose.Schema.Types.Mixed,
+    tax: mongoose.Schema.Types.Mixed,
     snapshot: mongoose.Schema.Types.Mixed,
     correctionOf: { type: String, default: '' },
     correctionReason: { type: String, default: '' },

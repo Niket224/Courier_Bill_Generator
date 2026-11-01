@@ -16,6 +16,17 @@ test('defaults and missing optional Gemini configuration', () => {
   assert.match(result.warnings[0], /GEMINI_API_KEY.*missing/);
 });
 
+test('Gemini configuration enforces bounded attempts and model identifier syntax', () => {
+  const defaults = validateEnv(valid);
+  assert.equal(defaults.geminiTimeoutMs, 8000);
+  assert.equal(defaults.geminiRetries, 2);
+  assert.equal(defaults.geminiModel, 'gemini-2.5-flash');
+  for (const extra of [{ GEMINI_MODEL: 'https://untrusted.test' }, { GEMINI_TIMEOUT_MS: '999' }, { GEMINI_TIMEOUT_MS: '10001' }, { GEMINI_RETRIES: '3' }, { GEMINI_RETRIES: '-1' }]) {
+    assert.throws(() => validateEnv({ ...valid, ...extra }), /GEMINI_/);
+  }
+  assert.equal(validateEnv({ ...valid, GEMINI_RETRIES: '0' }).geminiRetries, 0);
+});
+
 test('configured values and dummy credentials do not need network access', () => {
   const env = {
     ...valid,

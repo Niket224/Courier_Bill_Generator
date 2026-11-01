@@ -54,6 +54,7 @@
       if (data.code === 'CSRF_INVALID') lock('Your session needs refreshing. Please sign in again.');
       const error = new Error(data.error || 'Unable to complete request. Please try again.');
       error.code = data.code;
+      error.reconciliation = data.reconciliation;
       error.status = response.status;
       throw error;
     }

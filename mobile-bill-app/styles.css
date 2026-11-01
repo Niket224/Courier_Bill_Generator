@@ -1457,3 +1457,13 @@ select:focus {
 .history-card-amount { max-width: 100%; }
 .history-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 100%; }
 .history-actions button { padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-2); color: var(--text); font-size: 12px; }
+#resumeRateReviewButton[hidden], #retryRateReviewButton[hidden], #aiLoadingSpinner[hidden] { display: none !important; }
+#reviewValidation { white-space: pre-line; color: var(--danger); }
+#reviewGlobalNotes { width: 100%; min-height: 50px; }
+.modal-footer label { font-size: 12px; }
+.review-conditions { min-width: 130px; }
+#pdfReviewModal .modal-table { min-width: 850px; }
+#pdfReviewModal .modal-table input, #pdfReviewModal .modal-table select { min-width: 80px; }
+#pdfReviewModal .review-target-name { min-width: 130px; }
+#pdfReviewModal .modal-footer label:has(#reviewApproval) { display: flex; flex-direction: row; align-items: flex-start; gap: 10px; width: 100%; }
+#reviewApproval { width: 20px; height: 20px; min-height: 20px; flex: 0 0 20px; margin: 0; }

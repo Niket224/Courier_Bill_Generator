@@ -1,5 +1,25 @@
 # Production hardening plan for one operator
 
+Phase 4 extraction and approval controls are implemented and tested; see
+[report](phase4-report.md), [AI contract](ai-rate-card-contract.md) and
+[publication/rollout checklist](rate-card-publication.md). Before production:
+
+- Verify configured model entitlement and a separately authorized live synthetic extraction.
+- Review and explicitly publish legacy cards; deploy API and frontend/shared modules together.
+- Confirm the actual commercial formula, exact CITY matching and invoice fuel/tax settings.
+  Stored special conditions and broader destination types are not executed by final billing.
+- Validate hosted resource limits, HTTPS sessions, service-worker update and backup recovery.
+- Plan retention expansion before the 40-publication-per-shipper limit; never delete history silently.
+
+Next phase should address staged operational verification, backup/restore drills and
+explicit support for any business pricing rules outside the current contract.
+
+Phase 3 authoritative arithmetic is implemented; see [the billing contract](billing-calculation-contract.md)
+and [verification report](phase3-report.md). New finalizations recalculate from
+published cards, reject disagreements and store immutable calculation snapshots.
+Operator/accountant approval of the documented tax/pricing assumptions and
+deployment-specific validation remain required before production use.
+
 Phase 2 invoice persistence is implemented: see [its guide](invoice-persistence.md)
 and [verification report](phase2-report.md). Versioned saves, idempotent retries,
 immutable final history, snapshots and print confirmation are complete. The

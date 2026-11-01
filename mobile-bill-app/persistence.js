@@ -1,17 +1,20 @@
 // The same pure input adapter runs in browser and characterization tests.
 (function (root, factory) {
-  const value = factory();
+  const value = factory(typeof module === 'object' && module.exports ? require('./billing') : root.CourierBilling);
   if (typeof module === 'object' && module.exports) module.exports = value;
   else root.InvoicePersistence = value;
-})(typeof window === 'undefined' ? globalThis : window, () => {
+})(typeof window === 'undefined' ? globalThis : window, (Billing) => {
   function numeric(value, name) {
     if ((typeof value !== 'number' && typeof value !== 'string') || String(value).trim() === '' || !Number.isFinite(Number(value)) || Number(value) < 0) throw new Error(`Enter a valid ${name}.`);
+    if (Billing.decimal(value, name) !== Billing.decimal(Number(value), name)) throw new Error(`Unsupported precision for ${name}.`);
     return Number(value);
   }
   function validDate(value) { return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value; }
   function payload(state, status, calculate, totals) {
     if (!state || !['DRAFT', 'GENERATED'].includes(status)) throw new Error('Sign in and open a draft first.');
     const bill = { ...state.bill };
+    bill.taxMode = bill.taxMode || 'SPLIT';
+    bill.igstPct = numeric(bill.igstPct ?? 0, 'IGST percentage');
     for (const key of ['businessName', 'billTo', 'shipperCode', 'invoiceNo']) if (typeof bill[key] !== 'string' || !bill[key].trim()) throw new Error(`Complete ${key} before saving.`);
     for (const key of ['invoiceDate', 'periodStart', 'periodEnd']) if (!validDate(bill[key])) throw new Error(`Enter a valid ${key}.`);
     if (bill.periodStart > bill.periodEnd) throw new Error('Billing period end must follow its start.');
@@ -31,6 +34,7 @@
       const manualAmount = shipment.manualAmount === '' || shipment.manualAmount === undefined ? '' : numeric(shipment.manualAmount, 'manual amount');
       const result = calculate(shipment);
       if (result.status === 'missing') throw new Error('A shipment rate is missing. Fix rates before saving or printing.');
+      if (result.status === 'invalid') throw new Error(result.error || 'Invalid shipment calculation.');
       const rate = rates.find((r) => r.destination.trim().toUpperCase() === String(shipment.destination).trim().toUpperCase());
       return { id: String(shipment.id), awb: String(shipment.cno).trim(), bookingDate: shipment.date,
         destination: String(shipment.destination), origin: shipment.origin || '', receiverName: shipment.receiverName || '',
@@ -43,7 +47,7 @@
     for (const [name, amount] of Object.entries(summary)) numeric(amount, name);
     return { invoiceNumber: bill.invoiceNo.trim().toUpperCase(), shipperCode: bill.shipperCode.trim().toUpperCase(), clientName: bill.billTo,
       clientGst: bill.gstNo, invoiceDate: bill.invoiceDate, shipments, subtotal: summary.subtotal,
-      taxRate: bill.cgstPct + bill.sgstPct, taxAmount: summary.cgst + summary.sgst, totalAmount: summary.final, status,
+      taxRate: Billing.percentSum(bill.cgstPct, bill.sgstPct, bill.igstPct), taxAmount: Billing.rupees(Billing.money(summary.cgst) + Billing.money(summary.sgst) + Billing.money(summary.igst || 0)), totalAmount: summary.final, status,
       client: state.invoiceMetadata?.client ?? null, notes: state.invoiceMetadata?.notes || '', dueDate: state.invoiceMetadata?.dueDate || undefined,
       snapshot: { bill, rates, totals: summary }, correctionOf: state.correctionOf || '', correctionReason: state.correctionReason || '' };
   }

@@ -3,7 +3,7 @@ const fixture = require('../fixtures/bill.json');
 function receipt(payload) {
   return { success: true, operationVersion: payload.expectedVersion + 1, data: {
     ...payload, _id: 'a'.repeat(24), revision: payload.expectedVersion + 1,
-    operations: [{ requestId: payload.requestId }], totalsVerified: false
+    operations: [{ requestId: payload.requestId }], totalsVerified: payload.status === 'GENERATED'
   } };
 }
 test.beforeEach(async ({ context }) => {

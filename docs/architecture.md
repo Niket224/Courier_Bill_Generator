@@ -1,4 +1,10 @@
-# Architecture (Phases 0–2)
+# Architecture (Phases 0–4)
+
+Phase 4 adds a shared strict rate-card contract, bounded PDF validation worker,
+injected/mocked AI provider boundary, server review drafts and an atomic per-shipper
+approved version ledger. Final-invoice verification reads the approved ledger;
+legacy rates remain estimate-only until explicitly reviewed and published.
+See [AI contract](ai-rate-card-contract.md) and [publication design](rate-card-publication.md).
 
 ## Actual stack and entry points
 
@@ -64,6 +70,13 @@ Existing default data contains business/customer-like information. Tests use onl
 new synthetic fixtures and fresh browser contexts, never a personal browser profile.
 
 ## Billing boundaries and decisions
+
+Phase 3 supersedes the earlier split described below: [billing.js](../mobile-bill-app/billing.js)
+is the shared pure exact-decimal/integer-paise engine. New final invoices are
+verified against published MongoDB base-charge cards through
+[billingVerification](../server/services/billingVerification.js), with versioned
+calculation snapshots. See [the current contract](billing-calculation-contract.md).
+The remaining paragraph records the pre-Phase-3 baseline, not the current finalization policy.
 
 Browser billing uses `(baseRate + max(0, weight - baseKg) * perKgRate) * pieces`,
 with manual overrides, then fuel, then separate CGST and SGST rounded to two decimals.

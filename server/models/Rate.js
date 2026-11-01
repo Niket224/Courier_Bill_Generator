@@ -2,6 +2,8 @@ const mongoose = require('mongoose');
 
 const rateSchema = new mongoose.Schema(
   {
+    baseRate: { type: Number, min: 0 },
+    revision: { type: Number, default: 0 },
     shipperCode: {
       type: String,
       required: [true, 'Shipper code is required'],

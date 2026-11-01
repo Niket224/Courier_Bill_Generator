@@ -4,21 +4,33 @@ const Invoice = require('../models/Invoice');
 
 const { saveInvoice, transitionInvoice } = require('../services/invoicePersistence');
 const { InvoiceError, date: validateDate } = require('../services/invoiceValidation');
+const { validateInvoice } = require('../services/invoiceValidation');
+const { calculate, differences } = require('../services/billingVerification');
 function operation(handler) {
   return async (req, res, next) => {
     try {
       const result = await handler(req);
       res.status(!result.replayed && result.operationVersion === 1 ? 201 : 200).json({
         success: true, data: result.invoice, replayed: result.replayed, operationVersion: result.operationVersion,
-        totalsVerified: false
+        totalsVerified: result.invoice.totalsVerified === true
       });
     } catch (error) {
-      if (error instanceof InvoiceError) return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+      if (error instanceof InvoiceError) return res.status(error.status).json({ success: false, code: error.code, error: error.message, ...(error.reconciliation ? { reconciliation: error.reconciliation } : {}) });
       next(error);
     }
   };
 }
 router.post('/save', operation((req) => saveInvoice(req.body)));
+router.post('/calculate', async (req, res, next) => {
+  try {
+    const { data } = validateInvoice(req.body);
+    const calculation = await calculate(data);
+    res.json({ success: true, calculation, mismatches: differences(data, calculation) });
+  } catch (error) {
+    if (error instanceof InvoiceError) return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+    next(error);
+  }
+});
 router.post('/:id/status', operation((req) => transitionInvoice(req.params.id, req.body)));
 router.use((req, res, next) => {
   if (req.method !== 'GET') return next();
@@ -55,7 +67,7 @@ router.get('/', async (req, res, next) => {
 
     const [invoices, total] = await Promise.all([
       Invoice.find(query)
-        .select('-snapshot -operations')
+        .select('-snapshot -operations -calculationSnapshot')
         .sort({ invoiceDate: -1, createdAt: -1 })
         .skip(skip)
         .limit(limit),
@@ -153,7 +165,7 @@ router.get('/search', async (req, res, next) => {
 
     const [invoices, total] = await Promise.all([
       Invoice.find(query)
-        .select('-snapshot -operations')
+        .select('-snapshot -operations -calculationSnapshot')
         .sort({ invoiceDate: -1, createdAt: -1 })
         .skip(skip)
         .limit(limit),

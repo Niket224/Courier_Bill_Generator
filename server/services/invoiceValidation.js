@@ -40,12 +40,14 @@ function image(value, name) {
 function snapshot(value) {
   if (value === undefined) return undefined;
   object(value, ['bill', 'rates', 'totals'], 'snapshot');
-  object(value.bill, [...billText, ...billDates, 'fuelPct', 'cgstPct', 'sgstPct', 'logoSrc', 'signatureSrc'], 'snapshot.bill');
+  object(value.bill, [...billText, ...billDates, 'fuelPct', 'cgstPct', 'sgstPct', 'taxMode', 'igstPct', 'logoSrc', 'signatureSrc'], 'snapshot.bill');
   const bill = {};
   for (const key of billText) bill[key] = text(value.bill[key], `snapshot.bill.${key}`, 2000, ['businessName', 'billTo', 'invoiceNo', 'shipperCode'].includes(key));
   for (const key of billDates) bill[key] = date(value.bill[key], `snapshot.bill.${key}`);
   if (bill.periodStart > bill.periodEnd) invalid('snapshot.bill.periodEnd');
   for (const key of ['fuelPct', 'cgstPct', 'sgstPct']) bill[key] = number(value.bill[key], key, undefined, 1000);
+  if (value.bill.taxMode !== undefined) { if (!['SPLIT', 'IGST', 'NONE'].includes(value.bill.taxMode)) invalid('taxMode'); bill.taxMode = value.bill.taxMode; }
+  if (value.bill.igstPct !== undefined) bill.igstPct = number(value.bill.igstPct, 'igstPct', undefined, 1000);
   for (const key of ['logoSrc', 'signatureSrc']) bill[key] = image(value.bill[key] ?? '', key);
   if (!Array.isArray(value.rates) || value.rates.length > 1000) invalid('snapshot.rates');
   const rates = value.rates.map((rate) => {
@@ -54,11 +56,12 @@ function snapshot(value) {
       baseKg: number(rate.baseKg, 'baseKg'), baseRate: number(rate.baseRate, 'baseRate'), perKgRate: number(rate.perKgRate, 'perKgRate') };
   });
   const keys = ['gross', 'fuel', 'subtotal', 'cgst', 'sgst', 'final'];
+  if (value.totals?.igst !== undefined) keys.push('igst');
   object(value.totals, keys, 'snapshot.totals');
   return { bill, rates, totals: Object.fromEntries(keys.map((key) => [key, number(value.totals[key], `totals.${key}`)])) };
 }
 function validateInvoice(input) {
-  object(input, ['requestId', 'expectedVersion', 'invoiceNumber', 'shipperCode', 'client', 'clientName', 'clientGst', 'invoiceDate', 'dueDate', 'shipments', 'subtotal', 'taxRate', 'taxAmount', 'totalAmount', 'status', 'notes', 'snapshot', 'correctionOf', 'correctionReason'], 'body');
+  object(input, ['requestId', 'expectedVersion', 'invoiceNumber', 'shipperCode', 'client', 'clientName', 'clientGst', 'invoiceDate', 'dueDate', 'shipments', 'subtotal', 'taxRate', 'taxAmount', 'totalAmount', 'status', 'notes', 'snapshot', 'correctionOf', 'correctionReason', 'tax'], 'body');
   const id = requestId(input.requestId);
   const expectedVersion = version(input.expectedVersion);
   const invoiceNumber = text(input.invoiceNumber, 'invoiceNumber', 100, true).toUpperCase();
@@ -83,7 +86,8 @@ function validateInvoice(input) {
     return result;
   });
   if (new Set(shipments.map((s) => s.awb)).size !== shipments.length) invalid('duplicate shipment.awb');
-  // Compatibility only: retain the historical fallback arithmetic. This is NOT rate verification.
+  // Frozen Phase 2 claim normalization, retained for old request hashes/unverified drafts.
+  // Never authoritative: new finalizations require explicit claims and the shared engine.
   const round = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
   const subtotal = number(input.subtotal, 'subtotal', shipments.reduce((sum, s) => sum + s.amount, 0));
   const taxRate = number(input.taxRate, 'taxRate', 18, 1000);
@@ -96,6 +100,12 @@ function validateInvoice(input) {
     subtotal, taxRate, taxAmount, totalAmount, status, notes: text(input.notes, 'notes', 4000), snapshot: snapshot(input.snapshot),
     correctionOf: text(input.correctionOf, 'correctionOf', 100).toUpperCase(), correctionReason: text(input.correctionReason, 'correctionReason', 1000) };
   if (data.client !== null && (typeof data.client !== 'string' || !/^[a-f0-9]{24}$/i.test(data.client))) invalid('client');
+  if (input.tax !== undefined) {
+    object(input.tax, ['mode', 'fuelPct', 'cgstPct', 'sgstPct', 'igstPct'], 'tax');
+    if (!['SPLIT', 'IGST', 'NONE'].includes(input.tax.mode)) invalid('tax.mode');
+    data.tax = { mode: input.tax.mode };
+    for (const key of ['fuelPct', 'cgstPct', 'sgstPct', 'igstPct']) data.tax[key] = number(input.tax[key], `tax.${key}`, 0, 1000);
+  }
   if (data.dueDate && data.dueDate < data.invoiceDate) invalid('dueDate');
   if (data.correctionOf && (!data.correctionReason || data.correctionOf === invoiceNumber)) invalid('correctionOf');
   if (data.snapshot && (data.snapshot.bill.invoiceNo.toUpperCase() !== invoiceNumber || data.snapshot.bill.shipperCode.toUpperCase() !== data.shipperCode ||

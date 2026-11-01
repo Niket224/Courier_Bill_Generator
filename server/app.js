@@ -5,8 +5,9 @@ const { createAuth } = require('./security/auth');
 const rateRoutes = require('./routes/rateRoutes');
 const invoiceRoutes = require('./routes/invoiceRoutes');
 const aiRoutes = require('./routes/aiRoutes');
+const rateCardRoutes = require('./routes/rateCardRoutes');
 
-function createApp(config, { sessionStore, limits } = {}) {
+function createApp(config, { sessionStore, limits, aiProvider, aiOptions } = {}) {
   if (!config?.sessionSecret || !config.adminPasswordHash || !Array.isArray(config.allowedOrigins)) {
     throw new Error('Validated security configuration is required.');
   }
@@ -39,7 +40,8 @@ function createApp(config, { sessionStore, limits } = {}) {
   app.use('/api/auth', auth.router);
   app.use('/api/rates', auth.requireAdmin, auth.csrf);
   app.post('/api/rates/parse-pdf', auth.pdfLimit);
-  app.use('/api/rates', rateRoutes, aiRoutes);
+  app.use('/api/rates', rateRoutes, aiRoutes({ config, provider: aiProvider, ...aiOptions }));
+  app.use('/api/rate-cards', auth.requireAdmin, auth.csrf, rateCardRoutes(config.adminUsername));
   app.use('/api/invoices', auth.requireAdmin, auth.csrf, invoiceRoutes);
   app.use((req, res) => res.status(404).json({ success: false, error: 'Endpoint not found.' }));
   app.use((error, req, res, next) => {

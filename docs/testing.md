@@ -1,5 +1,47 @@
 # Testing and local setup
 
+## Current Phase 4 verification
+
+`npm test`: **251 passed** (98 unit, 67 isolated API, 86 Chromium desktop/mobile),
+zero failed/skipped. All 194 baseline cases remain represented; rate publication
+fixtures now follow the explicit approval workflow. See [full named results](phase4-test-results.txt).
+`npm run test:coverage`: 165 passed; 91.72% lines, 87.72% branches, 91.15% functions
+over loaded backend/shared modules, including the new rate-card contract (98.63% lines).
+Browser UI execution is not included in this metric. See [coverage output](phase4-coverage.txt).
+
+New cases cover strict extraction schema, actual synthetic PDFs, deterministic
+provider faults, approval/CSRF, atomic publication, concurrent conflicts, rollback,
+idempotent lost-response recovery, unresolved fields, session recovery and stored XSS.
+Historical-invoice preservation is exercised by the existing financial browser suite
+against the new publication flow. No live Gemini calls, real keys or production DBs.
+
+Phase 4 dependency commands executed:
+
+```sh
+npm install --prefix server --save-exact @google/genai pdf-lib
+npm uninstall --prefix server @google/generative-ai
+npm audit --prefix server --omit=dev
+npm audit
+```
+
+Both audits reported zero vulnerabilities. A transitive node-domexception deprecation
+warning was emitted during installation. Use the locked clean-checkout commands below.
+The initial focused browser run had 12 passes/2 failures caused by a shared test cookie
+invalidated by the reauthentication case; retaining its rotated cookie fixed the fixture.
+A later mobile sizing assertion measured an animated 19.68px bounding box rather than
+the configured 20px width (250 passed/1 failed); it now checks stable computed CSS.
+The final complete run passed without retries. Browser plugin not available; the existing
+Playwright runner supplied rendered desktop/mobile interaction and screenshot checks.
+
+See [Phase 4 report](phase4-report.md) and [manual staging checklist](rate-card-publication.md).
+
+Phase 3 adds the shared exact billing engine and independent financial fixtures.
+See [billing test cases](billing-test-cases.md) and [the Phase 3 report](phase3-report.md).
+Run `npm test`, `npm run test:coverage`, and `npm run test:performance` from root.
+Coverage now includes the shared billing module in addition to backend modules.
+The new financial browser suite uses another disposable API on 4189 with normal
+authentication limits; neither test API accepts production connection settings.
+
 Phase 2 results and all executed test names are recorded in
 [the Phase 2 report](phase2-report.md) and [test output](phase2-test-results.txt).
 The original Phase 0 verification below is historical. Invoice tests now use

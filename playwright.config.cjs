@@ -10,5 +10,7 @@ module.exports = defineConfig({
   webServer: [{ command: 'node scripts/serve_mobile_app.mjs', url: 'http://127.0.0.1:4187',
     env: { PORT: '4187', NODE_ENV: 'test' }, reuseExistingServer: false },
     { command: 'node scripts/e2e-api.cjs', url: 'http://127.0.0.1:4188/api/health',
-      timeout: 900000, env: { NODE_ENV: 'test', TEST_DB_MODE: 'memory' }, reuseExistingServer: false }]
+      timeout: 900000, env: { NODE_ENV: 'test', TEST_DB_MODE: 'memory' }, reuseExistingServer: false },
+    { command: 'node scripts/e2e-api.cjs', url: 'http://127.0.0.1:4189/api/health', timeout: 900000,
+      env: { NODE_ENV: 'test', TEST_DB_MODE: 'memory', E2E_API_PORT: '4189' }, reuseExistingServer: false }]
 });

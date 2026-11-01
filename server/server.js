@@ -13,7 +13,9 @@ const connection = connectDB();
 const sessionStore = createSessionStore(connection.then((mongoose) => mongoose.connection.getClient()), config);
 const app = createApp(config, { sessionStore });
 Promise.all([connection, sessionStore.collectionP]).then(() => {
-  app.listen(config.port, () => console.log(`Server running on port ${config.port}`));
+  const server = app.listen(config.port, () => console.log(`Server running on port ${config.port}`));
+  server.requestTimeout = 45000;
+  server.headersTimeout = 10000;
 }).catch(() => {
   console.error('Startup failed. Check database availability and session-store permissions.');
   process.exitCode = 1;

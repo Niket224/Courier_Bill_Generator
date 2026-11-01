@@ -3,6 +3,12 @@ const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { validateInvoice, validateTransition } = require('../../server/services/invoiceValidation');
 const adapter = require('../../mobile-bill-app/persistence');
+test('Phase 2 canonical request hash remains byte-compatible', () => {
+  const { fingerprint } = require('../../server/services/invoiceValidation');
+  const input = { requestId: '11111111-1111-4111-8111-111111111111', expectedVersion: 0, invoiceNumber: 'LEGACY-HASH', shipperCode: 'TEST', invoiceDate: '2026-01-02', status: 'GENERATED', shipments: [{ awb: 'TEST-AWB', bookingDate: '2026-01-02', weight: 2, amount: 100 }] };
+  // Independently captured from the committed Phase 2 validator before these changes.
+  assert.equal(fingerprint({ action: 'SAVE', expectedVersion: 0, data: validateInvoice(input).data }), 'e0bf99cf4d9b693f78871c1ee4ce23a347677e8f73138a16dfa744863e0a2507');
+});
 const fixture = require('../fixtures/bill.json');
 function valid(patch = {}) {
   return { requestId: randomUUID(), expectedVersion: 0, invoiceNumber: 'TEST-NEW', shipperCode: 'TEST', invoiceDate: '2026-01-02',

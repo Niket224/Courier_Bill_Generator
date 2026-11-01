@@ -65,6 +65,8 @@ const billFields = [
   "fuelPct",
   "cgstPct",
   "sgstPct",
+  "taxMode",
+  "igstPct",
 ];
 
 function cryptoId() {
@@ -147,45 +149,53 @@ function getRate(client, destination) {
   );
 }
 
+function billingTax() {
+  return { mode: state.bill.taxMode || 'SPLIT', fuelPct: state.bill.fuelPct, cgstPct: state.bill.cgstPct, sgstPct: state.bill.sgstPct, igstPct: state.bill.igstPct ?? 0 };
+}
+async function publishCurrentRates() {
+  if (!state || invoiceSaving || !window.CourierAuth.isAuthenticated()) return;
+  const card = { shipperCode: state.bill.shipperCode, clientInfo: { clientName: state.bill.billTo || '', address: state.bill.billAddress || '', quotationDate: state.bill.invoiceDate || '' },
+    globalRules: { minWeightKg: null, fuelSurchargePct: state.bill.fuelPct, notes: '' },
+    rates: state.rates.filter((r) => normalize(r.client) === normalize(state.bill.shipperCode)).map((r) => ({ targetName: r.destination, targetType: 'CITY', baseKg: r.baseKg, baseRate: r.baseRate, perKgRate: r.perKgRate, formula: window.RateCardContract.FORMULA, conditions: '' })) };
+  openReviewModal(card);
+}async function loadPublishedRates() {
+  if (!state || invoiceSaving || !window.CourierAuth.isAuthenticated()) return;
+  const epoch = workspaceEpoch;
+  setInvoiceBusy(true);
+  try {
+    const result = await (await window.CourierAuth.apiFetch(`${API_BASE}/rates?shipperCode=${encodeURIComponent(state.bill.shipperCode)}`)).json();
+    if (!result.success || !Array.isArray(result.data)) throw new Error('Published rates could not be loaded.');
+    const cards = result.data.filter((r) => r.targetType === 'CITY' && r.baseRate !== undefined && r.approved === true);
+    if (!cards.length) throw new Error('No reviewed exact-destination cards are published for this shipper.');
+    if (epoch !== workspaceEpoch || !state) return;
+    if (!confirm('Replace this shipper’s local rates with published cards? Your current draft will be archived first.')) return;
+    if (!archiveCurrentDraft()) return;
+    state.rates = [...state.rates.filter((r) => normalize(r.client) !== normalize(state.bill.shipperCode)), ...cards.map((r) => ({ id: cryptoId(), client: r.shipperCode, destination: r.targetName.toUpperCase(), baseKg: r.baseKg, baseRate: r.baseRate, perKgRate: r.perKgRate }))];
+    saveState(); renderRates(); renderShipments(); renderAll();
+  } catch (error) { if (epoch === workspaceEpoch) setInvoiceSaveState('Failed to save', error.message); }
+  finally { if (epoch === workspaceEpoch) setInvoiceBusy(false); }
+}
 function calculateShipment(shipment) {
-  const manual = Number(shipment.manualAmount);
-  if (Number.isFinite(manual) && String(shipment.manualAmount).trim() !== "") {
-    return { amount: manual, status: "manual" };
-  }
-
-  const rate = getRate(state.bill.shipperCode, shipment.destination);
-  if (!rate) return { amount: 0, status: "missing" };
-
-  const weight = asNumber(shipment.weight);
-  const pcs = asNumber(shipment.pcs, 1);
-  const baseKg = asNumber(rate.baseKg);
-  const baseRate = asNumber(rate.baseRate);
-  const perKgRate = asNumber(rate.perKgRate);
-  const extraWeight = Math.max(0, weight - baseKg);
-  const amount = round2((baseRate + extraWeight * perKgRate) * pcs);
-  return { amount, status: "ok" };
+  try {
+    const row = window.CourierBilling.shipment({ weight: shipment.weight, pcs: shipment.pcs, manualAmount: shipment.manualAmount }, getRate(state.bill.shipperCode, shipment.destination));
+    return { amount: row.amount, status: row.status };
+  } catch (error) { return error.code === 'MISSING_RATE' ? { amount: 0, status: 'missing' } : { amount: 0, status: 'invalid', error: error.message }; }
 }
-
-function round2(value) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+function shipmentLabel(result) {
+  if (result.status === 'missing') return 'CHECK RATE';
+  if (result.status === 'invalid') return 'CHECK INPUT';
+  return money(result.amount) + (result.status === 'manual' ? ' (manual)' : '');
 }
-
 function totals() {
-  const gross = round2(
-    state.shipments.reduce((sum, shipment) => {
-      if (!shipment.cno && !shipment.destination) return sum;
-      return sum + calculateShipment(shipment).amount;
-    }, 0),
-  );
-  const fuel = round2(gross * (asNumber(state.bill.fuelPct) / 100));
-  const subtotal = round2(gross + fuel);
-  const cgst = round2(subtotal * (asNumber(state.bill.cgstPct) / 100));
-  const sgst = round2(subtotal * (asNumber(state.bill.sgstPct) / 100));
-  const final = round2(subtotal + cgst + sgst);
-  return { gross, fuel, subtotal, cgst, sgst, final };
+  const lines = state.shipments.filter((s) => s.cno || s.destination).map((s) => window.CourierBilling.shipment(
+    { weight: s.weight, pcs: s.pcs, manualAmount: s.manualAmount }, getRate(state.bill.shipperCode, s.destination)));
+  const result = window.CourierBilling.components(lines, billingTax()).totals;
+  // Keep the legacy split-tax shape for existing callers; IGST is explicit when selected.
+  if ((state.bill.taxMode || 'SPLIT') !== 'IGST') delete result.igst;
+  return result;
 }
-
-function numberToWordsIndian(value) {
+function numberToWordsIndian(value) { return window.CourierBilling.words(value); }
+function legacyNumberToWordsIndian(value) {
   const ones = ["", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN", "ELEVEN", "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN", "SIXTEEN", "SEVENTEEN", "EIGHTEEN", "NINETEEN"];
   const tens = ["", "", "TWENTY", "THIRTY", "FORTY", "FIFTY", "SIXTY", "SEVENTY", "EIGHTY", "NINETY"];
   const twoDigits = (number) => {
@@ -272,6 +282,11 @@ function bindBillForm() {
     input.value = state.bill[field] ?? "";
     const persist = () => {
       state.bill[field] = input.value;
+      if (field === 'taxMode') {
+        if (input.value !== 'SPLIT') { state.bill.cgstPct = 0; state.bill.sgstPct = 0; }
+        if (input.value !== 'IGST') state.bill.igstPct = 0;
+        for (const key of ['cgstPct', 'sgstPct', 'igstPct']) document.getElementById(key).value = state.bill[key] ?? 0;
+      }
       saveState();
       if (field === "shipperCode") {
         renderShipments();
@@ -389,7 +404,7 @@ function renderShipments() {
         <td><input class="cell-input cell-num" data-id="${escapeHtml(shipment.id)}" data-field="weight" data-kind="shipment" type="number" inputmode="decimal" step="0.001" value="${escapeHtml(shipment.weight ?? "")}" /></td>
         <td class="col-amount">
           <span class="amount-pill ${result.status === "missing" ? "error" : ""}">
-            ${result.status === "missing" ? "CHECK RATE" : money(result.amount)}
+            ${shipmentLabel(result)}
           </span>
         </td>
         <td class="col-action">
@@ -425,7 +440,13 @@ function renderShipments() {
 }
 
 function renderSummary() {
-  const total = historicalRecord?.snapshot?.totals || totals();
+  let total;
+  try { total = historicalRecord?.snapshot?.totals || totals(); }
+  catch (error) {
+    for (const id of ['summaryGross', 'summarySubtotal', 'summaryFinal']) document.getElementById(id).textContent = 'CHECK INPUT';
+    const banner = document.getElementById('warningBanner'); banner.hidden = false; banner.textContent = error.message;
+    return;
+  }
   document.getElementById("summaryGross").textContent = money(total.gross);
   document.getElementById("summarySubtotal").textContent = money(total.subtotal);
   document.getElementById("summaryFinal").textContent = money(total.final);
@@ -441,7 +462,9 @@ function renderSummary() {
 }
 
 function renderInvoice(record = historicalRecord) {
-  const total = record?.snapshot?.totals || totals();
+  let total;
+  try { total = record?.snapshot?.totals || totals(); }
+  catch (error) { document.getElementById('invoicePaper').innerHTML = `<p>Provisional preview: ${escapeHtml(error.message)}</p>`; return; }
   const rows = state.shipments
     .filter((shipment) => shipment.cno || shipment.destination)
     .map((shipment, index) => {
@@ -509,12 +532,11 @@ function renderInvoice(record = historicalRecord) {
         <tr><td>G TOTAL: RS</td><td>${plainMoney(total.gross)}</td></tr>
         <tr><td>Fuel charge @ ${plainMoney(state.bill.fuelPct)}%</td><td>${plainMoney(total.fuel)}</td></tr>
         <tr><td>SUB TOTAL</td><td>${plainMoney(total.subtotal)}</td></tr>
-        <tr><td>CGST @ ${plainMoney(state.bill.cgstPct)}%</td><td>${plainMoney(total.cgst)}</td></tr>
-        <tr><td>SGST @ ${plainMoney(state.bill.sgstPct)}%</td><td>${plainMoney(total.sgst)}</td></tr>
+        ${(state.bill.taxMode || 'SPLIT') === 'IGST' ? `<tr><td>IGST @ ${plainMoney(state.bill.igstPct)}%</td><td>${plainMoney(total.igst)}</td></tr>` : `<tr><td>CGST @ ${plainMoney(state.bill.cgstPct)}%</td><td>${plainMoney(total.cgst)}</td></tr><tr><td>SGST @ ${plainMoney(state.bill.sgstPct)}%</td><td>${plainMoney(total.sgst)}</td></tr>`}
         <tr><td>BILL AMOUNT</td><td>${plainMoney(total.final)}</td></tr>
       </table>
     </div>
-    <div class="amount-words">RUPEES: ${numberToWordsIndian(total.final)} ONLY</div>
+    <div class="amount-words">RUPEES: ${record ? (record.calculationSnapshot?.amountWords || legacyNumberToWordsIndian(total.final)) : numberToWordsIndian(total.final)} ONLY</div>
     <div class="invoice-bottom-row">
       <div class="e-oe">E.&amp; O.E.</div>
       <div class="signature-block">
@@ -784,7 +806,7 @@ function updateShipmentRow(shipment) {
   const pill = row.querySelector(".amount-pill");
   if (pill) {
     pill.classList.toggle("error", result.status === "missing");
-    pill.textContent = result.status === "missing" ? "CHECK RATE" : money(result.amount);
+    pill.textContent = shipmentLabel(result);
   }
   row.classList.toggle("row-error", result.status === "missing");
 }
@@ -1047,6 +1069,8 @@ function init(bind = true) {
   document.getElementById("newBillButton").addEventListener("click", newBill);
   document.getElementById("printButton").addEventListener("click", printInvoice);
   document.getElementById('saveDraftButton').addEventListener('click', () => persistInvoiceToBackend('DRAFT'));
+  document.getElementById('publishRatesButton').addEventListener('click', publishCurrentRates);
+  document.getElementById('loadPublishedRatesButton').addEventListener('click', loadPublishedRates);
   document.getElementById('retrySaveButton').addEventListener('click', () => persistInvoiceToBackend(state?.persistence?.pending?.payload.status || 'DRAFT'));
   document.getElementById('restoreArchiveButton').addEventListener('click', restoreLocalArchive);
   for (const [id, key] of [['invoiceDueDate', 'dueDate'], ['invoiceNotes', 'notes']]) {
@@ -1119,212 +1143,22 @@ const API_BASE = (window.location.hostname === "localhost" || window.location.ho
   : "/api";
 
 function setupAiPdfParser() {
-  const triggerBtn = document.getElementById("triggerPdfUploadButton");
-  const fileInput = document.getElementById("pdfRateUpload");
-  const fileNameDisplay = document.getElementById("pdfFileNameDisplay");
-  const parseBtn = document.getElementById("parsePdfButton");
-  const spinner = document.getElementById("aiLoadingSpinner");
-
-  triggerBtn?.addEventListener("click", () => fileInput?.click());
-
-  fileInput?.addEventListener("change", (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (fileNameDisplay) fileNameDisplay.textContent = file.name;
-      if (parseBtn) parseBtn.disabled = false;
-    } else {
-      if (fileNameDisplay) fileNameDisplay.textContent = "No file chosen";
-      if (parseBtn) parseBtn.disabled = true;
+  window.RateReview.bind({
+    getState: () => state,
+    persist: () => saveState(false),
+    onPublished: (card) => {
+      if (!state || !archiveCurrentDraft()) return false;
+      state.rates = [...state.rates.filter((r) => normalize(r.client) !== normalize(card.shipperCode)),
+        ...card.rates.filter((r) => r.targetType === 'CITY').map((r) => ({ id: cryptoId(), client: card.shipperCode, destination: r.targetName.toUpperCase(), baseKg: r.baseKg, baseRate: r.baseRate, perKgRate: r.perKgRate }))];
+      if (!saveState()) return false;
+      renderRates(); renderShipments(); renderAll();
+      setInvoiceSaveState('Unsaved', 'Rates published. Invoice preview remains provisional until server verification.');
+      return true;
     }
   });
-
-  parseBtn?.addEventListener("click", async () => {
-    const file = fileInput?.files?.[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append("pdf", file);
-
-    if (spinner) spinner.hidden = false;
-    if (parseBtn) parseBtn.disabled = true;
-
-    try {
-      const response = await window.CourierAuth.apiFetch(`${API_BASE}/rates/parse-pdf`, {
-        method: "POST",
-        body: formData
-      });
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || "Failed to parse PDF rate card");
-      }
-
-      openReviewModal(result.data);
-      showToast("PDF parsed successfully by Gemini AI!");
-    } catch (error) {
-      console.error("AI PDF Parse Error:", error);
-      showToast(`AI Parsing Error: ${error.message}`);
-    } finally {
-      if (spinner) spinner.hidden = true;
-      if (parseBtn) parseBtn.disabled = false;
-    }
-  });
-
-  document.getElementById("closeReviewModal")?.addEventListener("click", closeReviewModal);
-  document.getElementById("cancelReviewModal")?.addEventListener("click", closeReviewModal);
-  document.getElementById("addReviewRowButton")?.addEventListener("click", addReviewRow);
-  document.getElementById("reviewRatesTableBody")?.addEventListener("click", (event) => {
-    event.target.closest('button[data-action="delete-review"]')?.closest('tr')?.remove();
-  });
-  document.getElementById("saveReviewedRatesButton")?.addEventListener("click", saveReviewedRates);
-
-  // Close modal when clicking the dark backdrop (outside the card)
-  document.getElementById("pdfReviewModal")?.addEventListener("click", (e) => {
-    if (e.target.id === "pdfReviewModal") closeReviewModal();
-  });
 }
-
-function openReviewModal(data) {
-  if (!state || !window.CourierAuth.isAuthenticated()) return;
-  const modal = document.getElementById("pdfReviewModal");
-  if (!modal) return;
-
-  document.getElementById("reviewClientName").value = data.clientInfo?.clientName || state.bill.shipperCode || "";
-  document.getElementById("reviewQuotationDate").value = data.clientInfo?.quotationDate || "";
-  document.getElementById("reviewClientAddress").value = data.clientInfo?.address || "";
-  document.getElementById("reviewMinWeightKg").value = data.globalRules?.minWeightKg ?? "";
-  document.getElementById("reviewFuelSurchargePct").value = data.globalRules?.fuelSurchargePct ?? "";
-
-  renderReviewModalTable(data.rates || []);
-
-  // Show modal — clear all three hiding mechanisms
-  modal.hidden = false;
-  modal.classList.remove("hidden");
-  modal.style.display = "";
-}
-
-function closeReviewModal() {
-  const modal = document.getElementById("pdfReviewModal");
-  if (!modal) return;
-  modal.hidden = true;
-  modal.classList.add("hidden");
-  modal.style.display = "none";
-}
-
-function renderReviewModalTable(rates) {
-  const tbody = document.getElementById("reviewRatesTableBody");
-  if (!tbody) return;
-
-  tbody.innerHTML = rates.map((r, idx) => `
-    <tr data-idx="${idx}">
-      <td><input class="review-target-name" value="${escapeHtml(r.targetName)}" placeholder="e.g. patna, bihar" /></td>
-      <td>
-        <select class="review-target-type">
-          <option value="CITY" ${r.targetType === "CITY" ? "selected" : ""}>CITY</option>
-          <option value="STATE" ${r.targetType === "STATE" ? "selected" : ""}>STATE</option>
-          <option value="CUSTOM_ZONE" ${r.targetType === "CUSTOM_ZONE" ? "selected" : ""}>CUSTOM_ZONE</option>
-          <option value="REGION" ${r.targetType === "REGION" ? "selected" : ""}>REGION</option>
-          <option value="DEFAULT" ${r.targetType === "DEFAULT" ? "selected" : ""}>DEFAULT</option>
-        </select>
-      </td>
-      <td><input type="number" class="review-base-kg" value="${escapeHtml(r.baseKg ?? 1)}" step="0.1" /></td>
-      <td><input type="number" class="review-per-kg" value="${escapeHtml(r.perKgRate ?? 0)}" step="0.1" /></td>
-      <td>
-        <button type="button" class="icon-btn delete" data-action="delete-review">&times;</button>
-      </td>
-    </tr>
-  `).join("");
-}
-
-function addReviewRow() {
-  const tbody = document.getElementById("reviewRatesTableBody");
-  if (!tbody) return;
-  const tr = document.createElement("tr");
-  tr.innerHTML = `
-    <td><input class="review-target-name" placeholder="Target Name" /></td>
-    <td>
-      <select class="review-target-type">
-        <option value="CITY">CITY</option>
-        <option value="STATE">STATE</option>
-        <option value="CUSTOM_ZONE">CUSTOM_ZONE</option>
-        <option value="REGION">REGION</option>
-        <option value="DEFAULT">DEFAULT</option>
-      </select>
-    </td>
-    <td><input type="number" class="review-base-kg" value="1" step="0.1" /></td>
-    <td><input type="number" class="review-per-kg" value="0" step="0.1" /></td>
-    <td>
-      <button type="button" class="icon-btn delete" data-action="delete-review">&times;</button>
-    </td>
-  `;
-  tbody.appendChild(tr);
-}
-
-async function saveReviewedRates() {
-  const shipperCode = document.getElementById("reviewClientName").value.trim().toUpperCase() || state.bill.shipperCode || "DEFAULT";
-  const rows = document.querySelectorAll("#reviewRatesTableBody tr");
-
-  const ratesToSave = [];
-  rows.forEach((tr) => {
-    const targetName = tr.querySelector(".review-target-name")?.value.trim().toLowerCase();
-    const targetType = tr.querySelector(".review-target-type")?.value;
-    const baseKg = Number(tr.querySelector(".review-base-kg")?.value || 1);
-    const perKgRate = Number(tr.querySelector(".review-per-kg")?.value || 0);
-
-    if (targetName && !isNaN(perKgRate)) {
-      ratesToSave.push({ shipperCode, targetName, targetType, baseKg, perKgRate });
-    }
-  });
-
-  if (!ratesToSave.length) {
-    showToast("Kam se kam ek valid rate row add karo");
-    return;
-  }
-
-  let savedCount = 0;
-  for (const r of ratesToSave) {
-    try {
-      const res = await window.CourierAuth.apiFetch(`${API_BASE}/rates`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(r)
-      });
-      if (res.ok) savedCount++;
-    } catch (err) {
-      console.warn("Backend rate save error (using local storage fallback):", err);
-    }
-    if (!state || !window.CourierAuth.isAuthenticated()) return;
-
-    const existingIdx = state.rates.findIndex(
-      (ex) => normalize(ex.client) === normalize(r.shipperCode) && normalize(ex.destination) === normalize(r.targetName)
-    );
-    if (existingIdx >= 0) {
-      state.rates[existingIdx] = {
-        ...state.rates[existingIdx],
-        baseKg: r.baseKg,
-        perKgRate: r.perKgRate,
-        baseRate: r.perKgRate * r.baseKg
-      };
-    } else {
-      state.rates.push({
-        id: cryptoId(),
-        client: r.shipperCode,
-        destination: r.targetName.toUpperCase(),
-        baseKg: r.baseKg,
-        baseRate: r.perKgRate * r.baseKg,
-        perKgRate: r.perKgRate
-      });
-    }
-  }
-
-  saveState();
-  renderRates();
-  renderShipments();
-  renderAll();
-  closeReviewModal();
-  showToast(`${savedCount || ratesToSave.length} rates saved successfully!`);
-}
-
+function openReviewModal(data) { if (state && window.CourierAuth.isAuthenticated()) window.RateReview.open(data); }
+function closeReviewModal() { window.RateReview.close(); }
 function setupHistoryTab() {
   document.getElementById('historyInvoiceList')?.addEventListener('click', handleHistoryAction);
   document.getElementById("executeSearchButton")?.addEventListener("click", fetchPastInvoices);
@@ -1379,8 +1213,8 @@ async function fetchPastInvoices() {
             <button type="button" data-history="open">Open</button>
             <button type="button" data-history="download">Download record</button>
             <button type="button" data-history="correct">Create correction</button>
-            ${inv.schemaVersion === 2 && inv.status === 'GENERATED' ? '<button type="button" data-history="PAID">Mark paid</button>' : ''}
-            ${inv.schemaVersion === 2 && inv.status !== 'CANCELLED' ? '<button type="button" data-history="CANCELLED">Cancel</button>' : ''}
+            ${[2, 3].includes(inv.schemaVersion) && inv.status === 'GENERATED' ? '<button type="button" data-history="PAID">Mark paid</button>' : ''}
+            ${[2, 3].includes(inv.schemaVersion) && inv.status !== 'CANCELLED' ? '<button type="button" data-history="CANCELLED">Cancel</button>' : ''}
           </div>
         </div>
       </div>
@@ -1449,7 +1283,7 @@ async function persistInvoiceToBackend(status = 'DRAFT', printAfter = false) {
       const result = await response.json();
       if (!result.success || result.data.revision !== meta.confirmed.revision || !['GENERATED', 'PAID'].includes(result.data.status)) throw new Error('Saved invoice changed or was cancelled. Reload it from History.');
       if (state !== current || epoch !== workspaceEpoch) return false;
-      setInvoiceSaveState('Saved', 'Finalized invoice confirmed. Totals are recorded, not independently verified.');
+      setInvoiceSaveState('Saved', result.data.totalsVerified ? 'Finalized invoice confirmed; server calculation verified.' : 'Historical invoice confirmed; original unverified amounts preserved.');
       if (printAfter) finalPrint(result.data);
       return true;
     }
@@ -1467,6 +1301,7 @@ async function persistInvoiceToBackend(status = 'DRAFT', printAfter = false) {
     if (!response.ok || result.success !== true || typeof result.data?._id !== 'string' || !/^[a-f0-9]{24}$/i.test(result.data._id) || result.data.invoiceNumber !== pending.payload.invoiceNumber ||
         result.operationVersion !== pending.payload.expectedVersion + 1 || result.data.revision !== result.operationVersion ||
         result.data.status !== pending.payload.status || result.data.totalAmount !== pending.payload.totalAmount ||
+        (pending.payload.status === 'GENERATED' && !result.replayed && result.data.totalsVerified !== true) ||
         !Array.isArray(result.data.operations) || !result.data.operations.some((op) => op.requestId === pending.payload.requestId)) {
       throw new Error('The server did not confirm this exact save. Retry or check History; final printing is blocked.');
     }
@@ -1480,7 +1315,7 @@ async function persistInvoiceToBackend(status = 'DRAFT', printAfter = false) {
       setInvoiceSaveState('Unsaved', 'The earlier snapshot was saved. Current edits are still unsaved; finalized content requires a correction.');
       return false;
     }
-    setInvoiceSaveState('Saved', `${result.data.status === 'DRAFT' ? 'Draft saved. Use Print to finalize.' : 'Finalized and saved.'} Totals are recorded, not independently verified.`);
+    setInvoiceSaveState('Saved', result.data.totalsVerified ? 'Finalized and saved. Server calculation verified.' : 'Draft saved. Preview remains provisional until server verification.');
     if (printAfter && result.data.status === 'GENERATED') finalPrint(result.data);
     return true;
   } catch (error) {
@@ -1488,7 +1323,7 @@ async function persistInvoiceToBackend(status = 'DRAFT', printAfter = false) {
       delete current.persistence?.pending; // Definite rejection: corrected data gets a fresh request ID.
       saveState(false);
     }
-    if (state === current && epoch === workspaceEpoch) setInvoiceSaveState(error.code === 'OFFLINE' || navigator.onLine === false ? 'Offline' : 'Failed to save', error.message);
+    if (state === current && epoch === workspaceEpoch) setInvoiceSaveState(error.code === 'OFFLINE' || navigator.onLine === false ? 'Offline' : 'Failed to save', error.message + (error.reconciliation ? ` Expected total: Rs ${error.reconciliation.expected.final.toFixed(2)}. Load published rates or correct the input, then retry.` : ''));
     return false;
   } finally {
     clearTimeout(timeout);
@@ -1547,6 +1382,8 @@ function activateWorkspace() {
     });
     return;
   }
+  state.bill.taxMode ||= 'SPLIT';
+  state.bill.igstPct ??= 0;
   init();
 }
 function clearPrivateWorkspace() {

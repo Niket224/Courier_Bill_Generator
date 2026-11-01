@@ -1,0 +1,18 @@
+{
+  "card": { "baseKg": 3, "baseRate": 45, "perKgRate": 15 },
+  "lines": [
+    { "name": "below base", "weight": 1, "pcs": 1, "paise": 4500 },
+    { "name": "at base", "weight": 3, "pcs": 1, "paise": 4500 },
+    { "name": "above base", "weight": 4, "pcs": 1, "paise": 6000 },
+    { "name": "fractional weight", "weight": 3.333, "pcs": 1, "paise": 5000 },
+    { "name": "multiple pieces", "weight": 4.5, "pcs": 2, "paise": 13500 },
+    { "name": "zero weight base charge", "weight": 0, "pcs": 1, "paise": 4500 },
+    { "name": "manual total ignores pieces", "weight": 4.5, "pcs": 2, "manualAmount": 25.5, "paise": 2550 }
+  ],
+  "invoice": {
+    "shipments": [{ "awb": "A", "weight": 1, "pcs": 1 }, { "awb": "B", "weight": 4.5, "pcs": 2 }],
+    "tax": { "mode": "SPLIT", "fuelPct": 20, "cgstPct": 9, "sgstPct": 9 },
+    "paise": { "gross": 18000, "fuel": 3600, "subtotal": 21600, "cgst": 1944, "sgst": 1944, "igst": 0, "final": 25488 },
+    "words": "TWO HUNDRED FIFTY FOUR AND EIGHTY EIGHT PAISE"
+  }
+}

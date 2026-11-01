@@ -7,7 +7,7 @@ if (!['unit', 'integration', 'coverage'].includes(mode)) throw new Error('Unknow
 // Do not inherit credentials, dotenv loaders, or MongoDB binary overrides.
 const env = testEnvironment();
 const args = ['--test'];
-if (mode === 'coverage') args.push('--experimental-test-coverage', '--test-coverage-include=server/**/*.js', '--test-coverage-exclude=**/node_modules/**', '--test-coverage-exclude=**/test/**');
+if (mode === 'coverage') args.push('--experimental-test-coverage', '--test-coverage-include=server/**/*.js', '--test-coverage-include=mobile-bill-app/billing.js', '--test-coverage-include=mobile-bill-app/rate-card.js', '--test-coverage-exclude=**/node_modules/**', '--test-coverage-exclude=**/test/**');
 args.push(...(mode === 'integration' ? ['server/test/integration/*.test.js'] : ['server/test/*.test.js', 'tests/unit/*.test.cjs']));
 if (mode === 'coverage') args.push('server/test/integration/*.test.js');
 const result = spawnSync(process.execPath, args, { cwd: root, env, stdio: 'inherit' });

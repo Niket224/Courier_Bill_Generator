@@ -1,0 +1,222 @@
+
+> courier-bill-generator@1.0.0 test:coverage
+> node scripts/run-tests.mjs coverage
+
+✔ defaults and missing optional Gemini configuration (10.0916ms)
+✔ Gemini configuration enforces bounded attempts and model identifier syntax (2.0727ms)
+✔ configured values and dummy credentials do not need network access (0.9596ms)
+✔ required configuration is validated even in test mode (0.4291ms)
+✔ aggregated errors identify variables without exposing supplied values (0.9113ms)
+✔ MongoDB URI requires a scheme and host (0.4525ms)
+✔ ports accept boundaries and reject malformed, blank, and out-of-range values (0.4523ms)
+✔ CORS entries must be origins (0.5445ms)
+✔ blank Gemini key warns without preventing startup (0.2707ms)
+✔ frontend server exits before listening when PORT is invalid (245.1994ms)
+✔ health, missing route, and input validation (1663.5798ms)
+✔ legacy rate reads, fallback priority, minimum weight and rounding (155.5514ms)
+✔ invoice computation, controlled lifecycle, pagination, search and retrieval (133.8277ms)
+✔ successful admin login, session check, fixation prevention and cookie flags (423.9806ms)
+✔ incorrect password and unknown user have the same generic error (738.0955ms)
+✔ missing or malformed login credentials return 400 (69.6135ms)
+✔ invalid session and unsigned cookies return 401 (9.8922ms)
+✔ expired session is rejected before MongoDB TTL cleanup (408.1132ms)
+✔ sessions survive app recreation but credential changes revoke them (391.5221ms)
+✔ logout destroys session and old cookies cannot be replayed (370.0725ms)
+✔ unauthenticated GET /api/invoices returns 401 (3.3437ms)
+✔ unauthenticated GET /api/invoices/search returns 401 (4.3692ms)
+✔ unauthenticated GET /api/invoices/TEST-100 returns 401 (5.0097ms)
+✔ unauthenticated POST /api/invoices/save returns 401 (4.6098ms)
+✔ unauthenticated GET /api/rates returns 401 (3.6874ms)
+✔ unauthenticated POST /api/rates returns 401 (5.9906ms)
+✔ unauthenticated POST /api/rates/calculate returns 401 (6.2381ms)
+✔ unauthenticated POST /api/rates/parse-pdf returns 401 (6.2911ms)
+✔ login and private writes require session-bound CSRF tokens (779.7171ms)
+✔ explicit allowed CORS origin supports credentialed preflight (4.1416ms)
+✔ disallowed origins including arbitrary Vercel domains and null are rejected (10.7172ms)
+✔ authentication rate limit blocks repeated attempts (32.601ms)
+✔ PDF upload is authenticated, CSRF protected and rate limited without Gemini calls (402.6551ms)
+✔ malformed and oversized JSON return safe errors (19.5351ms)
+✔ security headers, no-store, and production Secure cookies (27.5337ms)
+✔ production API errors do not leak secrets or stack traces (429.4681ms)
+✔ single-account limiter also applies across independent login sessions (34.0957ms)
+✔ password hashing concurrency is bounded for the single operator (403.6391ms)
+✔ upgraded upload middleware rejects excess files and oversized PDF safely (441.2143ms)
+✔ Gemini failures never leak provider credentials or documents (1362.8416ms)
+✔ invalid Gemini output is redacted, and synthetic valid PDF extraction still works (1348.7934ms)
+✔ session store failures fail closed with a generic API error (375.4346ms)
+✔ identical concurrent saves are idempotent and create exactly one invoice (50.3517ms)
+✔ duplicate invoice numbers and changed idempotency payloads are rejected (59.7674ms)
+✔ draft updates use revisions and conflicting concurrent edits never partially combine (60.1432ms)
+✔ finalized and paid contents are immutable; paid and cancellation actions retain original amounts (110.974ms)
+✔ corrections link new numbers without mutating original finalized data (39.5946ms)
+✔ legacy historical documents remain readable and cannot be silently adopted or overwritten (21.8215ms)
+✔ invalid fields and failed updates leave invoice data unchanged (74.7272ms)
+✔ complete metadata and shipment snapshot survives persistence without repricing (49.2578ms)
+✔ new lifecycle endpoints retain authentication and CSRF protections (18.3738ms)
+✔ history lists stay lightweight while detail preserves reconstruction data (34.6586ms)
+✔ invoice search rejects malformed filters and treats search input literally (118.5521ms)
+✔ concurrent lifecycle retries append only one audit operation (77.3164ms)
+✔ server independently verifies new final invoices using published base-charge cards (37.0091ms)
+✔ tampered subtotal cannot be finalized (31.9082ms)
+✔ tampered taxAmount cannot be finalized (33.3078ms)
+✔ tampered totalAmount cannot be finalized (36.6477ms)
+✔ tampered shipment amount, missing rate and malformed monetary values are rejected (65.2111ms)
+✔ calculation endpoint requires authentication/CSRF and returns structured reconciliation (40.2298ms)
+✔ committed replay ignores new rates, edited idempotency payload fails, historical calculation is unchanged (127.2565ms)
+✔ IGST, no-tax and explicit manual totals are independently checked (48.0487ms)
+✔ legacy base-charge omission is estimate-only and cannot certify a final invoice (57.7015ms)
+✔ new finalizations cannot rely on legacy implicit claims or default tax assumptions (29.4716ms)
+✔ Phase 2 committed request IDs still replay without financial recertification (23.892ms)
+✔ new rate-card endpoints require authentication, CSRF and explicit approval (68.979ms)
+✔ reviewed drafts save and update without changing active or legacy rates (44.4503ms)
+✔ publication is atomic, idempotent and switches all rates together (54.6182ms)
+✔ concurrent publications conflict instead of overwriting a winner (56.0443ms)
+✔ publication database failure leaves the previously approved version unchanged (59.0291ms)
+✔ rollback creates a new approved version without changing historical invoices (130.5474ms)
+✔ draft tampering, stale revisions and cross-shipper identifiers are rejected (59.6608ms)
+✔ fake signatures and corrupt PDFs never reach the provider (448.573ms)
+✔ parser timeout, service outage, credentials and quota return safe failures (3737.3066ms)
+✔ missing AI charges are unresolved, malformed fields are rejected, and neither changes rates (1322.1223ms)
+✔ only one PDF is admitted while a provider operation is in flight (884.9842ms)
+✔ disconnected isolated database fails safely without buffering a write (431.6935ms)
+✔ golden shipment: below base (4.5875ms)
+✔ golden shipment: at base (0.8888ms)
+✔ golden shipment: above base (1.1027ms)
+✔ golden shipment: fractional weight (0.2712ms)
+✔ golden shipment: multiple pieces (0.2425ms)
+✔ golden shipment: zero weight base charge (0.2089ms)
+✔ golden shipment: manual total ignores pieces (0.422ms)
+✔ golden invoice has independently specified gross, fuel, split taxes and words (10.0786ms)
+✔ reject negative weight (0.8285ms)
+✔ reject invalid weight (0.5009ms)
+✔ reject blank weight (0.2101ms)
+✔ reject missing weight (0.2044ms)
+✔ reject NaN (0.1391ms)
+✔ reject Infinity (0.1311ms)
+✔ reject zero pieces (0.1626ms)
+✔ reject negative pieces (0.1466ms)
+✔ reject fractional pieces (0.186ms)
+✔ reject negative override (0.1953ms)
+✔ reject invalid override (0.2877ms)
+✔ reject null weight (0.285ms)
+✔ reject null pieces (0.1504ms)
+✔ reject sub-paise override (0.1604ms)
+✔ reject excess precision (0.1546ms)
+✔ reject excessive value (0.1339ms)
+✔ missing rate and unknown destination selection cannot produce a normal charge (0.8482ms)
+✔ zero base, zero extra rate and zero manual override are permitted (0.3636ms)
+✔ half-up line rounding is exact, with no weight ceiling (0.6434ms)
+✔ zero fuel, fractional fuel and separately rounded taxes (0.6845ms)
+✔ IGST and explicit no-tax mode do not infer legal eligibility (0.6519ms)
+✔ sum of rounded components exactly equals the final paise (0.2966ms)
+✔ Indian words carry paise and handle large crore values (0.5259ms)
+✔ duplicate tracking numbers and workload limit are enforced (0.5909ms)
+✔ 1000 lines, repeated runs and browser-loaded module have exact parity (53.3288ms)
+✔ rate changes cannot mutate an earlier pure result or input (0.5931ms)
+✔ large totals stay exact up to the explicit limit and overflow is rejected (20.2368ms)
+✔ base charge, excess kilograms, pieces, and normalized rate lookup (15.4425ms)
+✔ manual amount and missing-rate status (12.654ms)
+✔ fuel and split GST are applied to the expected bases (5.212ms)
+✔ bulk input and invoice numbering (7.7398ms)
+✔ imported image sources and HTML attributes cannot inject executable markup (6.5507ms)
+✔ Phase 2 canonical request hash remains byte-compatible (8.9373ms)
+✔ invoice validator preserves legacy fallback arithmetic without claiming verification (4.1679ms)
+✔ strict invoice field, date, monetary and shipment validation (2.4258ms)
+✔ lifecycle validation requires version, request ID and reason (0.5191ms)
+✔ browser payload preserves full snapshot, pieces, manual amount and selected rate (3.4099ms)
+✔ browser refuses incomplete/invalid invoices before a request (1.1292ms)
+✔ both launchers use an environment that strips credentials and loaders (22.4063ms)
+✔ test database configuration fails closed (1.4048ms)
+✔ only a generated loopback URI is accepted (1.0375ms)
+✔ production connector and entry point refuse test mode before reading dotenv (1520.5816ms)
+✔ QA wrapper propagates an actual assertion failure as exit 1 (3147.4372ms)
+✔ valid extraction and reviewed normalization retain independent base charge (6.318ms)
+✔ rate schema rejects missing destination (0.8131ms)
+✔ rate schema rejects invalid destination type (0.6556ms)
+✔ rate schema rejects missing base rate (0.578ms)
+✔ rate schema rejects missing extra-weight rate (0.6154ms)
+✔ rate schema rejects negative base charge (0.5625ms)
+✔ rate schema rejects negative per-kg charge (0.5133ms)
+✔ rate schema rejects invalid base weight (0.3808ms)
+✔ rate schema rejects NaN (0.5202ms)
+✔ rate schema rejects Infinity (0.4274ms)
+✔ rate schema rejects duplicate destination (0.5692ms)
+✔ rate schema rejects conflicting duplicate (0.5208ms)
+✔ rate schema rejects unsupported formula (0.4095ms)
+✔ rate schema rejects missing surcharge (0.4229ms)
+✔ rate schema rejects invalid surcharge (0.348ms)
+✔ rate schema rejects incorrect AI field name (0.3337ms)
+✔ rate schema rejects extra fields (0.3012ms)
+✔ rate schema rejects empty rates (0.3643ms)
+✔ rate schema rejects conflicting minimum (0.4293ms)
+✔ missing AI prices remain unresolved and never default to zero or weight times rate (1.1585ms)
+✔ duplicate AI rows remain visible for resolution rather than being silently collapsed (0.5348ms)
+✔ explicit zero and decimal charges normalize without rounding or invented charges (0.5143ms)
+✔ malformed JSON, non-object responses and currency strings are rejected (0.8488ms)
+✔ PDF signatures, corruption, active content and object streams are rejected (1436.5922ms)
+✔ Gemini retries only transient errors and returns validated extraction (15.6909ms)
+✔ Gemini 401 is not retried and never exposes provider text (1.9195ms)
+✔ Gemini 403 is not retried and never exposes provider text (0.4367ms)
+✔ Gemini 429 is not retried and never exposes provider text (0.3696ms)
+✔ Gemini 404 is not retried and never exposes provider text (0.4249ms)
+✔ Gemini 400 is not retried and never exposes provider text (0.3358ms)
+✔ Gemini timeout and malformed output are bounded and safe (12.4175ms)
+✔ scrypt uses random salts, verifies correct passwords and rejects invalid inputs (2501.908ms)
+✔ security environment rejects missing and unsafe values without echoing them (2.5343ms)
+✔ production CORS rejects wildcard, absent origins and insecure schemes (1.9446ms)
+✔ service worker never intercepts authenticated API or external responses (3.6875ms)
+✔ app factory fails closed without security configuration or a session store (1624.7546ms)
+✔ credential helper refuses noninteractive input without printing a password (129.4843ms)
+ℹ tests 165
+ℹ suites 0
+ℹ pass 165
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 22211.1319
+ℹ start of coverage report
+ℹ ---------------------------------------------------------------------------------------------
+ℹ file                     | line % | branch % | funcs % | uncovered lines
+ℹ ---------------------------------------------------------------------------------------------
+ℹ mobile-bill-app          |        |          |         | 
+ℹ  billing.js              |  99.00 |    91.84 |  100.00 | 4
+ℹ  rate-card.js            |  98.63 |    78.75 |  100.00 | 4
+ℹ server                   |        |          |         | 
+ℹ  app.js                  | 100.00 |    91.30 |  100.00 | 
+ℹ  config                  |        |          |         | 
+ℹ   db.js                  |  37.14 |    66.67 |   33.33 | 11-32
+ℹ   env.js                 | 100.00 |   100.00 |  100.00 | 
+ℹ   security.js            | 100.00 |    94.12 |  100.00 | 
+ℹ   test-db.js             | 100.00 |   100.00 |  100.00 | 
+ℹ  models                  |        |          |         | 
+ℹ   Client.js              | 100.00 |   100.00 |  100.00 | 
+ℹ   Invoice.js             | 100.00 |   100.00 |  100.00 | 
+ℹ   Rate.js                | 100.00 |   100.00 |  100.00 | 
+ℹ   RateBook.js            | 100.00 |   100.00 |  100.00 | 
+ℹ   RateCardDraft.js       | 100.00 |   100.00 |  100.00 | 
+ℹ   Shipment.js            | 100.00 |   100.00 |  100.00 | 
+ℹ  routes                  |        |          |         | 
+ℹ   aiRoutes.js            | 100.00 |    95.45 |   71.43 | 
+ℹ   invoiceRoutes.js       |  87.56 |    82.76 |  100.00 | 30-32 89-90 118-136 187-188 221-222
+ℹ   rateCardRoutes.js      |  95.45 |    92.31 |   77.78 | 16
+ℹ   rateRoutes.js          |  87.16 |    81.03 |  100.00 | 25-29 87-88 104-108 124-128 144-145
+ℹ  scripts                 |        |          |         | 
+ℹ   hash-admin-password.js |  22.58 |    75.00 |   66.67 | 6-29
+ℹ  security                |        |          |         | 
+ℹ   auth.js                | 100.00 |    96.00 |  100.00 | 
+ℹ   password.js            | 100.00 |   100.00 |  100.00 | 
+ℹ   store.js               | 100.00 |    75.00 |  100.00 | 
+ℹ  server.js               |  16.67 |    50.00 |    0.00 | 5-24
+ℹ  services                |        |          |         | 
+ℹ   billingVerification.js |  93.06 |    85.71 |   90.91 | 11-15
+ℹ   geminiParser.js        |  77.19 |    94.59 |   85.71 | 8-20
+ℹ   invoicePersistence.js  |  93.81 |    87.50 |  100.00 | 36-37 89-91 95
+ℹ   invoiceValidation.js   |  99.18 |    90.37 |  100.00 | 38
+ℹ   pdf-worker.js          | 100.00 |    50.00 |   66.67 | 
+ℹ   pdfValidation.js       |  96.00 |    85.71 |   62.50 | 19
+ℹ   rateCards.js           | 100.00 |    81.63 |  100.00 | 
+ℹ ---------------------------------------------------------------------------------------------
+ℹ all files                |  91.72 |    87.72 |   91.15 | 
+ℹ ---------------------------------------------------------------------------------------------
+ℹ end of coverage report

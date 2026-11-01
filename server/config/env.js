@@ -34,12 +34,18 @@ function validateEnv(env) {
   }
   if (nodeEnv === 'production' && !allowedOrigins.length) errors.push('ALLOWED_ORIGINS is required in production.');
   let security;
+  const geminiModel = env.GEMINI_MODEL || 'gemini-2.5-flash';
+  if (!/^gemini-[a-z0-9][a-z0-9.-]{1,80}$/.test(geminiModel)) errors.push('GEMINI_MODEL must be a documented Gemini model identifier.');
+  const geminiTimeoutMs = env.GEMINI_TIMEOUT_MS ?? '8000';
+  const geminiRetries = env.GEMINI_RETRIES ?? '2';
+  if (!/^\d+$/.test(geminiTimeoutMs) || +geminiTimeoutMs < 1000 || +geminiTimeoutMs > 10000) errors.push('GEMINI_TIMEOUT_MS must be 1000–10000.');
+  if (!/^[0-2]$/.test(geminiRetries)) errors.push('GEMINI_RETRIES must be 0, 1 or 2.');
   try { security = securityConfig(env); } catch (error) { errors.push(error.message); }
   if (errors.length) {
     throw new Error(`Invalid environment configuration:\n- ${errors.join('\n- ')}\nSee .env.example for setup instructions.`);
   }
   return {
-    port, nodeEnv, allowedOrigins, ...security,
+    port, nodeEnv, allowedOrigins, ...security, geminiModel, geminiTimeoutMs: +geminiTimeoutMs, geminiRetries: +geminiRetries,
     warnings: !env.GEMINI_API_KEY || !env.GEMINI_API_KEY.trim()
       ? ['GEMINI_API_KEY is missing; PDF rate-card parsing is unavailable. Set it to enable this feature.'] : []
   };

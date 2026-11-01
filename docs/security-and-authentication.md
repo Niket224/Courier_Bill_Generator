@@ -1,5 +1,9 @@
 # Phase 1: single-operator security
 
+Phase 3 now adds [shared financial verification](billing-calculation-contract.md)
+without changing these authentication, CSRF or session protections. Mathematical
+verification does not certify legal tax classification or operator-approved rates.
+
 Phase 2 adds [reliable invoice persistence](invoice-persistence.md). Its authenticated
 workspace now loads drafts only after login and removes private DOM/working state
 on logout, while preserving stored drafts. Final printing requires a confirmed

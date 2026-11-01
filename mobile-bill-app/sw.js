@@ -1,11 +1,14 @@
-const CACHE_NAME = "courier-bill-app-v8";
+const CACHE_NAME = "courier-bill-app-v10";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css?v=5",
-  "./app.js?v=7",
-  "./auth.js?v=2",
-  "./persistence.js?v=1",
+  "./billing.js?v=1",
+  "./app.js?v=9",
+  "./rate-card.js?v=1",
+  "./rate-review.js?v=1",
+  "./auth.js?v=3",
+  "./persistence.js?v=2",
   "./manifest.webmanifest",
   "./assets/icon.svg",
   "./assets/logo.png",

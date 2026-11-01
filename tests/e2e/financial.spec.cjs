@@ -1,0 +1,143 @@
+const { test, expect } = require('@playwright/test');
+const { createHash } = require('node:crypto');
+const fixture = require('../fixtures/bill.json');
+const { password } = require('../fixtures/auth.cjs');
+let cookies;
+test.beforeAll(async ({ playwright }) => {
+  const client = await playwright.request.newContext({ baseURL: 'http://127.0.0.1:4189' });
+  const challenge = await (await client.get('/api/auth/csrf')).json();
+  const login = await client.post('/api/auth/login', { headers: { 'X-CSRF-Token': challenge.csrfToken }, data: { username: 'test-admin', password } });
+  expect(login.status()).toBe(200);
+  cookies = (await client.storageState()).cookies;
+  await client.dispose();
+});
+test.beforeEach(async ({ page, context }, info) => {
+  await context.addCookies(cookies);
+  const id = createHash('sha256').update(info.title + info.project.name).digest('hex').slice(0, 10).toUpperCase();
+  const shipper = `CALC-${id}`;
+  const data = structuredClone(fixture); data.bill.shipperCode = shipper; data.bill.invoiceNo = `CALC-${id}`;
+  data.rates[0].client = shipper;
+  data.rates.push({ id: 'second-rate', client: shipper, destination: 'RANCHI', baseKg: 2, baseRate: 60, perKgRate: 20 });
+  await context.addInitScript((value) => {
+    if (location.origin !== 'http://127.0.0.1:4187') return;
+    localStorage.setItem('courier-bill-app-v2', JSON.stringify(value));
+    window.print = () => { window.printCalls = (window.printCalls || 0) + 1; window.printedText = document.getElementById('invoicePaper').textContent; };
+  }, data);
+  await context.route('**/*', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.origin === 'http://127.0.0.1:5000' && url.pathname.startsWith('/api/')) return route.fulfill({ response: await route.fetch({ url: `http://127.0.0.1:4189${url.pathname}${url.search}` }) });
+    return url.origin === 'http://127.0.0.1:4187' ? route.continue() : route.abort();
+  });
+  page.on('dialog', (dialog) => dialog.accept());
+  await page.goto('/');
+  await expect(page.locator('.app-shell')).toBeVisible();
+});
+async function publish(page) {
+  await page.locator('button[data-target="invoice"]').click();
+  await page.locator('#publishRatesButton').click();
+  await page.locator('#saveReviewedRatesButton').click();
+  await expect(page.locator('#reviewStatus')).toContainText('Draft saved');
+  await page.locator('#reviewApproval').check();
+  await page.locator('#publishReviewedRatesButton').click();
+  await expect(page.locator('#reviewStatus')).toContainText('Published version');
+  await page.locator('#closeReviewModal').click();
+  await expect(page.locator('#invoiceSaveMessage')).toContainText('Rates published');
+}
+async function finalize(page) {
+  await page.locator('button[data-target="invoice"]').click();
+  await page.locator('#printButton').click();
+  await expect(page.locator('#invoiceSaveState')).toHaveText('Saved');
+  await expect(page.locator('#invoiceSaveMessage')).toContainText('Server calculation verified');
+  return page.evaluate(async () => (await (await window.CourierAuth.apiFetch(`${API_BASE}/invoices/${state.persistence.confirmed.id}`)).json()).data);
+}
+test('A: multiple destinations have explicit line amounts and a verified invoice total', async ({ page }) => {
+  await page.locator('#addShipmentButton').click();
+  const row = page.locator('.shipment-card').last();
+  await row.locator('[data-field="cno"]').fill('TEST002');
+  await row.locator('[data-field="destination"]').selectOption('RANCHI');
+  await row.locator('[data-field="weight"]').fill('3.5');
+  await expect(page.locator('#summaryFinal')).toHaveText('Rs 191.16');
+  await publish(page);
+  const saved = await finalize(page);
+  expect(saved.shipments.map((s) => s.amount)).toEqual([45, 90]); expect(saved.totalAmount).toBe(191.16);
+});
+test('B: fractional weight uses exact half-up paise rounding', async ({ page }) => {
+  await page.locator('#shipmentList [data-field="weight"]').fill('3.333');
+  await expect(page.locator('#summaryFinal')).toHaveText('Rs 70.80');
+  await publish(page);
+  expect((await finalize(page)).shipments[0].amount).toBe(50);
+});
+test('C: rate edits recalculate locally and require explicit publication before finalizing', async ({ page }) => {
+  await publish(page);
+  await page.locator('button[data-target="rates"]').click();
+  await page.locator('#rateList [data-field="baseRate"]').first().fill('50');
+  await expect(page.locator('#summaryFinal')).toHaveText('Rs 70.80');
+  await page.locator('button[data-target="invoice"]').click();
+  await page.locator('#printButton').click();
+  await expect(page.locator('#invoiceSaveState')).toHaveText('Failed to save');
+  await expect(page.locator('#invoiceSaveMessage')).toContainText('disagree');
+  await publish(page);
+  expect((await finalize(page)).totalAmount).toBe(70.8);
+});
+test('D: rate changes after issuance never change the historical invoice', async ({ page }) => {
+  await publish(page);
+  const original = await finalize(page);
+  await page.locator('button[data-target="rates"]').click();
+  await page.locator('#rateList [data-field="baseRate"]').first().fill('99');
+  await publish(page);
+  const reloaded = await page.evaluate(async (id) => (await (await window.CourierAuth.apiFetch(`${API_BASE}/invoices/${id}`)).json()).data, original._id);
+  expect(reloaded).toEqual(original);
+  await page.locator('button[data-target="history"]').click();
+  const card = page.locator('.history-card').filter({ hasText: original.invoiceNumber });
+  await card.getByRole('button', { name: 'Open', exact: true }).click();
+  await page.evaluate(() => { window.printedText = ''; });
+  await page.locator('#printButton').click();
+  await expect.poll(() => page.evaluate(() => window.printCalls)).toBe(2);
+  await expect.poll(() => page.evaluate(() => window.printedText)).toContain('63.72');
+});
+test('E: tampered preview total is blocked with server reconciliation', async ({ page, context }) => {
+  await publish(page);
+  await context.route('**/api/invoices/save', async (route) => {
+    const body = route.request().postDataJSON(); body.totalAmount += 1; body.snapshot.totals.final += 1;
+    const response = await route.fetch({ url: 'http://127.0.0.1:4189/api/invoices/save', postData: JSON.stringify(body) });
+    expect(response.status()).toBe(422); return route.fulfill({ response });
+  });
+  await page.locator('#printButton').click();
+  await expect(page.locator('#invoiceSaveMessage')).toContainText('Expected total: Rs 63.72');
+  expect(await page.evaluate(() => window.printCalls || 0)).toBe(0);
+});
+test('F: 100 synthetic shipments retain every line and printed total', async ({ page }) => {
+  await page.evaluate(() => { state.shipments = Array.from({ length: 100 }, (_, i) => ({ ...state.shipments[0], id: `row-${i}`, cno: `TEST-${i}` })); saveState(); renderShipments(); renderAll(); });
+  await expect(page.locator('#summaryFinal')).toHaveText('Rs 6372.00');
+  await publish(page);
+  const saved = await finalize(page);
+  expect(saved.shipments).toHaveLength(100); expect(saved.totalAmount).toBe(6372);
+  expect(await page.evaluate(() => window.printedText)).toContain('6372.00');
+});
+test('G: backend unavailability retains draft and blocks verified final printing', async ({ page, context }) => {
+  await publish(page);
+  await context.route('**/api/invoices/save', (route) => route.abort('internetdisconnected'));
+  await page.locator('#printButton').click();
+  await expect(page.locator('#invoiceSaveState')).toHaveText('Offline');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('courier-bill-app-v2')).shipments.length)).toBe(1);
+  expect(await page.evaluate(() => window.printCalls || 0)).toBe(0);
+});
+test('H: manual override is the complete row total and is recorded explicitly', async ({ page }) => {
+  await page.evaluate(() => { state.shipments[0].pcs = 2; state.shipments[0].manualAmount = '25.50'; saveState(); renderShipments(); renderAll(); });
+  await expect(page.locator('#summaryFinal')).toHaveText('Rs 36.10');
+  await expect(page.locator('.amount-pill')).toContainText('(manual)');
+  const saved = await finalize(page);
+  expect(saved.shipments[0].manualAmount).toBe(25.5); expect(saved.calculationSnapshot.appliedRates[0].manualOverride).toBe(true);
+});
+test('I: authenticated calculation uses CSRF and supports explicit IGST settings', async ({ page }, info) => {
+  await page.locator('.bill-details summary').click();
+  await page.locator('#taxMode').selectOption('IGST');
+  await page.locator('#igstPct').fill('18');
+  await expect(page.locator('#cgstPct')).toHaveValue('0');
+  await expect(page.locator('#sgstPct')).toHaveValue('0');
+  await publish(page);
+  const saved = await finalize(page);
+  expect(saved.calculationSnapshot.paise.igst).toBe(972); expect(saved.calculationSnapshot.paise.cgst).toBe(0);
+  expect(await page.evaluate(() => window.printedText)).toContain('IGST @ 18.00%');
+  await page.screenshot({ path: require('node:path').join(require('node:os').tmpdir(), `courier-phase3-${info.project.name}.png`) });
+});

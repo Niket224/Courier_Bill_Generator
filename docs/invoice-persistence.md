@@ -1,5 +1,11 @@
 # Phase 2: invoice persistence, integrity and recovery
 
+Phase 3 retains these concurrency/recovery safeguards and adds authoritative
+[financial verification](billing-calculation-contract.md). New writes use schema 3;
+new finals carry verified calculation snapshots. Phase 2 historical amounts and
+committed request hashes are preserved. References below to unverified totals
+describe the Phase 2 baseline and remaining provisional/legacy records.
+
 ## Save and print flow
 
 The browser validates the current invoice before creating a write request. It

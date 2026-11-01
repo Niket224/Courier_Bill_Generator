@@ -1,5 +1,6 @@
 const Invoice = require('../models/Invoice');
 const Client = require('../models/Client');
+const { verify } = require('./billingVerification');
 const { validateInvoice, validateTransition, fingerprint, InvoiceError } = require('./invoiceValidation');
 const conflict = (code, message) => { throw new InvoiceError(409, code, message); };
 function replay(invoice, requestId, hash) {
@@ -9,7 +10,7 @@ function replay(invoice, requestId, hash) {
   return { invoice, replayed: true, operationVersion: operation.version };
 }
 function writable(invoice, expectedVersion) {
-  if (invoice.schemaVersion !== 2) conflict('LEGACY_READ_ONLY', 'Historical invoice is read-only. Create a correction with a new number.');
+  if (![2, 3].includes(invoice.schemaVersion)) conflict('LEGACY_READ_ONLY', 'Historical invoice is read-only. Create a correction with a new number.');
   if (invoice.revision !== expectedVersion) conflict('VERSION_CONFLICT', 'Invoice changed elsewhere. Reload its saved version before continuing.');
   if (invoice.operations.length >= 1000) conflict('REVISION_LIMIT', 'Revision limit reached. Archive this draft and create a new invoice.');
 }
@@ -38,9 +39,17 @@ async function saveInvoice(body) {
     throw new InvoiceError(400, 'INVALID_CLIENT', 'Client reference must match an existing client for this shipper.');
   }
   const revision = expectedVersion + 1;
+  // Replay and immutability checks precede current-rate lookup. Never reprice an issued invoice.
+  if (data.status === 'GENERATED' && ['subtotal', 'taxRate', 'taxAmount', 'totalAmount'].some((key) => body[key] === undefined)) {
+    throw new InvoiceError(400, 'FINANCIAL_CLAIMS_REQUIRED', 'Explicit preview subtotal, tax rate, tax amount and total are required for final verification.');
+  }
+  if (data.status === 'GENERATED' && body.shipments.some((row) => row.actualWeight === undefined && row.weight === undefined)) {
+    throw new InvoiceError(400, 'SHIPMENT_WEIGHT_REQUIRED', 'Explicit shipment weights are required for final verification; zero must be entered deliberately.');
+  }
+  const calculation = data.status === 'GENERATED' ? await verify(data) : null;
   const operation = { requestId, hash, version: revision, action: 'SAVE', status: data.status, at: new Date() };
-  const fields = { ...data, dueDate: data.dueDate ?? null, snapshot: data.snapshot ?? null, schemaVersion: 2, revision, totalsVerified: false, reconstructionComplete: !!data.snapshot,
-    calculationContract: data.snapshot ? 'browser-v1-unverified' : 'legacy-api-v1-unverified' };
+  const fields = { ...data, dueDate: data.dueDate ?? null, snapshot: data.snapshot ?? null, schemaVersion: 3, revision, totalsVerified: !!calculation, reconstructionComplete: !!data.snapshot,
+    calculationSnapshot: calculation, calculationContract: calculation ? calculation.version : 'draft-unverified' };
   if (data.status === 'GENERATED') fields.finalizedAt = new Date();
   try {
     if (!existing) {
