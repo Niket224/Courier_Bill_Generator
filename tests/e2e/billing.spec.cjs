@@ -7,6 +7,9 @@ test.beforeEach(async ({ context }) => {
   // Block real API and external traffic, including localhost:5000.
   await context.route('**/*', async (route) => {
     const url = new URL(route.request().url());
+    if (url.pathname === '/api/auth/session') return route.fulfill({ json: {
+      authenticated: true, csrfToken: 'a'.repeat(64), expiresAt: Date.now() + 600000
+    } });
     if (url.pathname.startsWith('/api/')) return route.fulfill({ json: { success: true, data: [], count: 0 } });
     if (url.origin === 'http://127.0.0.1:4187') return route.continue();
     return route.abort();
@@ -45,4 +48,22 @@ test('add shipment, warn for missing rates, and open history safely', async ({ p
   await expect(page.locator('.amount-pill').first()).toContainText('CHECK RATE');
   await page.locator('button[data-target="history"]').click();
   await expect(page.locator('#historyInvoiceList')).toContainText('Koi past invoice nahi mili');
+});
+test('PDF review escapes untrusted fields and supports deleting a review row', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.app-shell')).toBeVisible();
+  await page.evaluate(() => openReviewModal({ clientInfo: { clientName: 'TEST' }, rates: [
+    { targetName: 'patna', targetType: 'CITY', baseKg: '\"><img src=x onerror="window.injected=true">', perKgRate: 15 }
+  ] }));
+  await expect(page.locator('#pdfReviewModal')).toBeVisible();
+  await expect(page.locator('#reviewRatesTableBody img')).toHaveCount(0);
+  await page.locator('#reviewRatesTableBody button[data-action="delete-review"]').click();
+  await expect(page.locator('#reviewRatesTableBody tr')).toHaveCount(0);
+  expect(await page.evaluate(() => window.injected)).toBeUndefined();
+  await page.locator('#closeReviewModal').click();
+  await page.evaluate(() => { state.shipments[0].id = 'test" onmouseover="window.injected=true'; renderShipments(); });
+  await page.locator('button[data-target="entry"]').click();
+  await page.locator('#shipmentList input[data-field="weight"]').fill('4.5');
+  await expect(page.locator('#summaryFinal')).toHaveText('Rs 95.58');
+  expect(await page.evaluate(() => window.injected)).toBeUndefined();
 });

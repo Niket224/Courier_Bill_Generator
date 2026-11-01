@@ -10,12 +10,25 @@
     <link rel="stylesheet" href="styles.css?v=5" />
   </head>
   <body>
-    <div class="app-shell">
+    <section id="loginPanel" class="login-panel" aria-labelledby="loginTitle">
+      <form id="loginForm" class="login-card">
+        <p class="eyebrow">Courier Bill App</p>
+        <h1 id="loginTitle">Operator sign in</h1>
+        <p id="loginMessage" role="status" aria-live="polite">Checking your session…</p>
+        <label for="loginUsername">Username</label>
+        <input id="loginUsername" name="username" autocomplete="username" maxlength="128" required />
+        <label for="loginPassword">Password</label>
+        <input id="loginPassword" name="password" type="password" autocomplete="current-password" required />
+        <button id="loginButton" class="primary-button" type="submit">Sign in</button>
+      </form>
+    </section>
+    <div class="app-shell" hidden>
       <header class="topbar">
         <div>
           <p class="eyebrow">Geeta Swarup Enterprises</p>
           <h1>Courier Bill App</h1>
         </div>
+        <button class="secondary-button" id="logoutButton" type="button">Sign out</button>
         <button class="icon-button" id="installButton" hidden aria-label="Install app">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" />
@@ -435,6 +448,7 @@
       </div>
     </div>
 
-    <script src="app.js?v=5" defer></script>
+    <script src="auth.js?v=1" defer></script>
+    <script src="app.js?v=6" defer></script>
   </body>
 </html>

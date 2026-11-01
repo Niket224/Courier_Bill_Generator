@@ -3,24 +3,20 @@ const path = require('node:path');
 const { validateEnv } = require('./config/env');
 if (process.env.NODE_ENV === 'test') throw new Error('Use the isolated test harness; server.js cannot start in test mode.');
 dotenv.config({ path: path.join(__dirname, '.env') });
-// Validate before loading routes, connecting to MongoDB, or opening a listener.
 const config = validateEnv(process.env);
+if (config.nodeEnv === 'test') throw new Error('Use the isolated test harness; server.js cannot start in test mode.');
 config.warnings.forEach((warning) => console.warn(`Configuration warning: ${warning}`));
 const connectDB = require('./config/db');
-
 const { createApp } = require('./app');
-const app = createApp(config);
-// Start server if not running in test mode
-const PORT = config.port;
-if (config.nodeEnv !== 'test') {
-  connectDB().then(() => {
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
-  }).catch((err) => {
-    console.error('Failed to initialize database connection. Check MONGO_URI and database availability.');
-    process.exitCode = 1;
-  });
-}
-
+const { createSessionStore } = require('./security/store');
+const connection = connectDB();
+const sessionStore = createSessionStore(connection.then((mongoose) => mongoose.connection.getClient()), config);
+const app = createApp(config, { sessionStore });
+Promise.all([connection, sessionStore.collectionP]).then(() => {
+  app.listen(config.port, () => console.log(`Server running on port ${config.port}`));
+}).catch(() => {
+  console.error('Startup failed. Check database availability and session-store permissions.');
+  process.exitCode = 1;
+  connection.then((mongoose) => mongoose.disconnect()).catch(() => {});
+});
 module.exports = app;

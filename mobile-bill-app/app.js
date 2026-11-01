@@ -117,7 +117,7 @@ function normalize(value) {
 }
 
 function formatDate(value) {
-  if (!value) return "";
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return "";
   const [year, month, day] = value.split("-");
   return `${day}/${month}/${year}`;
 }
@@ -310,13 +310,13 @@ function renderRates() {
   }
 
   const rows = state.rates.map((rate, index) => `
-    <tr data-id="${rate.id}">
+    <tr data-id="${escapeHtml(rate.id)}">
       <td class="col-num">${index + 1}</td>
-      <td><input class="cell-input" data-id="${rate.id}" data-field="client" data-kind="rate" value="${escapeHtml(rate.client ?? "")}" placeholder="Client" /></td>
-      <td><input class="cell-input" data-id="${rate.id}" data-field="destination" data-kind="rate" value="${escapeHtml(rate.destination ?? "")}" placeholder="Destination" /></td>
-      <td><input class="cell-input cell-num" data-id="${rate.id}" data-field="baseKg" data-kind="rate" type="number" inputmode="decimal" value="${escapeHtml(rate.baseKg ?? "")}" /></td>
-      <td><input class="cell-input cell-num" data-id="${rate.id}" data-field="baseRate" data-kind="rate" type="number" inputmode="decimal" value="${escapeHtml(rate.baseRate ?? "")}" /></td>
-      <td><input class="cell-input cell-num" data-id="${rate.id}" data-field="perKgRate" data-kind="rate" type="number" inputmode="decimal" value="${escapeHtml(rate.perKgRate ?? "")}" /></td>
+      <td><input class="cell-input" data-id="${escapeHtml(rate.id)}" data-field="client" data-kind="rate" value="${escapeHtml(rate.client ?? "")}" placeholder="Client" /></td>
+      <td><input class="cell-input" data-id="${escapeHtml(rate.id)}" data-field="destination" data-kind="rate" value="${escapeHtml(rate.destination ?? "")}" placeholder="Destination" /></td>
+      <td><input class="cell-input cell-num" data-id="${escapeHtml(rate.id)}" data-field="baseKg" data-kind="rate" type="number" inputmode="decimal" value="${escapeHtml(rate.baseKg ?? "")}" /></td>
+      <td><input class="cell-input cell-num" data-id="${escapeHtml(rate.id)}" data-field="baseRate" data-kind="rate" type="number" inputmode="decimal" value="${escapeHtml(rate.baseRate ?? "")}" /></td>
+      <td><input class="cell-input cell-num" data-id="${escapeHtml(rate.id)}" data-field="perKgRate" data-kind="rate" type="number" inputmode="decimal" value="${escapeHtml(rate.perKgRate ?? "")}" /></td>
       <td class="col-action">
         <button class="icon-btn delete" type="button" data-action="delete-rate" aria-label="Delete rate">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12M9 7V5h6v2m-7 3v8m4-8v8m4-8v8M8 7l1 14h6l1-14" /></svg>
@@ -362,14 +362,14 @@ function renderShipments() {
       : `<option value="">No rate</option>`;
 
     return `
-      <tr data-id="${shipment.id}" class="shipment-card ${result.status === "missing" ? "row-error" : ""}">
+      <tr data-id="${escapeHtml(shipment.id)}" class="shipment-card ${result.status === "missing" ? "row-error" : ""}">
         <td class="col-num">${index + 1}</td>
-        <td><input class="cell-input" data-id="${shipment.id}" data-field="cno" data-kind="shipment" value="${escapeHtml(shipment.cno ?? "")}" placeholder="C/NO" inputmode="numeric" /></td>
-        <td><input class="cell-input" data-id="${shipment.id}" data-field="date" data-kind="shipment" type="date" value="${escapeHtml(shipment.date ?? "")}" /></td>
-        <td><select class="cell-select" data-id="${shipment.id}" data-field="destination" data-kind="shipment">${destSelect}</select></td>
-        <td><input class="cell-input cell-sm" data-id="${shipment.id}" data-field="type" data-kind="shipment" value="${escapeHtml(shipment.type || "D")}" /></td>
-        <td><input class="cell-input cell-num" data-id="${shipment.id}" data-field="pcs" data-kind="shipment" type="number" inputmode="numeric" value="${escapeHtml(shipment.pcs ?? 1)}" /></td>
-        <td><input class="cell-input cell-num" data-id="${shipment.id}" data-field="weight" data-kind="shipment" type="number" inputmode="decimal" step="0.001" value="${escapeHtml(shipment.weight ?? "")}" /></td>
+        <td><input class="cell-input" data-id="${escapeHtml(shipment.id)}" data-field="cno" data-kind="shipment" value="${escapeHtml(shipment.cno ?? "")}" placeholder="C/NO" inputmode="numeric" /></td>
+        <td><input class="cell-input" data-id="${escapeHtml(shipment.id)}" data-field="date" data-kind="shipment" type="date" value="${escapeHtml(shipment.date ?? "")}" /></td>
+        <td><select class="cell-select" data-id="${escapeHtml(shipment.id)}" data-field="destination" data-kind="shipment">${destSelect}</select></td>
+        <td><input class="cell-input cell-sm" data-id="${escapeHtml(shipment.id)}" data-field="type" data-kind="shipment" value="${escapeHtml(shipment.type || "D")}" /></td>
+        <td><input class="cell-input cell-num" data-id="${escapeHtml(shipment.id)}" data-field="pcs" data-kind="shipment" type="number" inputmode="numeric" value="${escapeHtml(shipment.pcs ?? 1)}" /></td>
+        <td><input class="cell-input cell-num" data-id="${escapeHtml(shipment.id)}" data-field="weight" data-kind="shipment" type="number" inputmode="decimal" step="0.001" value="${escapeHtml(shipment.weight ?? "")}" /></td>
         <td class="col-amount">
           <span class="amount-pill ${result.status === "missing" ? "error" : ""}">
             ${result.status === "missing" ? "CHECK RATE" : money(result.amount)}
@@ -444,7 +444,7 @@ function renderInvoice() {
     }).join("");
 
   const logoHtml = (state.bill.logoSrc && state.bill.logoSrc !== "none")
-    ? `<img src="${state.bill.logoSrc}" class="invoice-logo" alt="Logo" />`
+    ? `<img src="${escapeHtml(safeImageSource(state.bill.logoSrc))}" class="invoice-logo" alt="Logo" />`
     : "";
 
   document.getElementById("invoicePaper").innerHTML = `
@@ -504,7 +504,7 @@ function renderInvoice() {
         <div class="signature-for">FOR ${escapeHtml(state.bill.businessName)}</div>
         <div class="signature-image-wrap">
           ${state.bill.signatureSrc
-      ? `<img src="${state.bill.signatureSrc}" class="invoice-signature-img" alt="Signature" />`
+      ? `<img src="${escapeHtml(safeImageSource(state.bill.signatureSrc))}" class="invoice-signature-img" alt="Signature" />`
       : `<div class="signature-placeholder"></div>`}
         </div>
         <div class="signature-title">PROPRIETOR / AUTHORISED SIGNATORY</div>
@@ -516,6 +516,10 @@ function renderInvoice() {
 function renderAll() {
   renderSummary();
   renderInvoice();
+}
+
+function safeImageSource(value) {
+  return typeof value === 'string' && (value === 'assets/logo.png' || /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(value)) ? value : '';
 }
 
 function escapeHtml(value) {
@@ -747,7 +751,8 @@ function importBulkShipments() {
 }
 
 function updateShipmentRow(shipment) {
-  const row = document.querySelector(`#shipmentList tr[data-id="${shipment.id}"]`);
+  const row = Array.from(document.querySelectorAll('#shipmentList tr[data-id]'))
+    .find((entry) => entry.dataset.id === String(shipment.id));
   if (!row) return;
   const result = calculateShipment(shipment);
   const pill = row.querySelector(".amount-pill");
@@ -1045,7 +1050,7 @@ function updateImageUploadsUI() {
 
   const hasLogo = state.bill.logoSrc && state.bill.logoSrc !== "none";
   if (logoPreview) {
-    logoPreview.src = hasLogo ? state.bill.logoSrc : "";
+    logoPreview.src = hasLogo ? safeImageSource(state.bill.logoSrc) : "";
     logoPreview.style.display = hasLogo ? "block" : "none";
   }
   if (removeLogoBtn) {
@@ -1061,7 +1066,7 @@ function updateImageUploadsUI() {
 
   const hasSig = !!state.bill.signatureSrc;
   if (signaturePreview) {
-    signaturePreview.src = state.bill.signatureSrc || "";
+    signaturePreview.src = safeImageSource(state.bill.signatureSrc);
     signaturePreview.style.display = hasSig ? "block" : "none";
   }
   if (removeSignatureBtn) {
@@ -1077,7 +1082,7 @@ function updateImageUploadsUI() {
    ========================================================================== */
 
 const API_BASE = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
-  ? "http://localhost:5000/api"
+  ? `${window.location.protocol}//${window.location.hostname}:5000/api`
   : "/api";
 
 function setupAiPdfParser() {
@@ -1111,7 +1116,7 @@ function setupAiPdfParser() {
     if (parseBtn) parseBtn.disabled = true;
 
     try {
-      const response = await fetch(`${API_BASE}/rates/parse-pdf`, {
+      const response = await window.CourierAuth.apiFetch(`${API_BASE}/rates/parse-pdf`, {
         method: "POST",
         body: formData
       });
@@ -1135,6 +1140,9 @@ function setupAiPdfParser() {
   document.getElementById("closeReviewModal")?.addEventListener("click", closeReviewModal);
   document.getElementById("cancelReviewModal")?.addEventListener("click", closeReviewModal);
   document.getElementById("addReviewRowButton")?.addEventListener("click", addReviewRow);
+  document.getElementById("reviewRatesTableBody")?.addEventListener("click", (event) => {
+    event.target.closest('button[data-action="delete-review"]')?.closest('tr')?.remove();
+  });
   document.getElementById("saveReviewedRatesButton")?.addEventListener("click", saveReviewedRates);
 
   // Close modal when clicking the dark backdrop (outside the card)
@@ -1185,10 +1193,10 @@ function renderReviewModalTable(rates) {
           <option value="DEFAULT" ${r.targetType === "DEFAULT" ? "selected" : ""}>DEFAULT</option>
         </select>
       </td>
-      <td><input type="number" class="review-base-kg" value="${r.baseKg ?? 1}" step="0.1" /></td>
-      <td><input type="number" class="review-per-kg" value="${r.perKgRate ?? 0}" step="0.1" /></td>
+      <td><input type="number" class="review-base-kg" value="${escapeHtml(r.baseKg ?? 1)}" step="0.1" /></td>
+      <td><input type="number" class="review-per-kg" value="${escapeHtml(r.perKgRate ?? 0)}" step="0.1" /></td>
       <td>
-        <button type="button" class="icon-btn delete" onclick="this.closest('tr').remove()">&times;</button>
+        <button type="button" class="icon-btn delete" data-action="delete-review">&times;</button>
       </td>
     </tr>
   `).join("");
@@ -1212,7 +1220,7 @@ function addReviewRow() {
     <td><input type="number" class="review-base-kg" value="1" step="0.1" /></td>
     <td><input type="number" class="review-per-kg" value="0" step="0.1" /></td>
     <td>
-      <button type="button" class="icon-btn delete" onclick="this.closest('tr').remove()">&times;</button>
+      <button type="button" class="icon-btn delete" data-action="delete-review">&times;</button>
     </td>
   `;
   tbody.appendChild(tr);
@@ -1242,7 +1250,7 @@ async function saveReviewedRates() {
   let savedCount = 0;
   for (const r of ratesToSave) {
     try {
-      const res = await fetch(`${API_BASE}/rates`, {
+      const res = await window.CourierAuth.apiFetch(`${API_BASE}/rates`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(r)
@@ -1311,7 +1319,7 @@ async function fetchPastInvoices() {
   if (endDate) params.append("endDate", endDate);
 
   try {
-    const res = await fetch(`${API_BASE}/invoices/search?${params.toString()}`);
+    const res = await window.CourierAuth.apiFetch(`${API_BASE}/invoices/search?${params.toString()}`);
     if (!res.ok) throw new Error("Failed to fetch past invoices");
     const json = await res.json();
     const invoices = json.data || [];
@@ -1330,7 +1338,7 @@ async function fetchPastInvoices() {
         </div>
         <div class="history-card-amount">
           <div class="history-amount-text">${money(inv.totalAmount)}</div>
-          <span class="badge-status ${(inv.status || "generated").toLowerCase()}">${escapeHtml(inv.status || "GENERATED")}</span>
+          <span class="badge-status ${escapeHtml((inv.status || "generated").toLowerCase())}">${escapeHtml(inv.status || "GENERATED")}</span>
         </div>
       </div>
     `).join("");
@@ -1367,7 +1375,7 @@ async function persistInvoiceToBackend() {
       status: "GENERATED"
     };
 
-    await fetch(`${API_BASE}/invoices/save`, {
+    await window.CourierAuth.apiFetch(`${API_BASE}/invoices/save`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)

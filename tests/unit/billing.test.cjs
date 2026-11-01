@@ -39,3 +39,13 @@ test('bulk input and invoice numbering', () => {
   assert.equal(rows[0].cno, 'TEST002');
   assert.equal(run('numberToWordsIndian(123.45)'), 'ONE HUNDRED TWENTY THREE AND FORTY FIVE PAISE');
 });
+test('imported image sources and HTML attributes cannot inject executable markup', () => {
+  const run = browserLogic();
+  assert.equal(run('safeImageSource("assets/logo.png")'), 'assets/logo.png');
+  assert.equal(run('safeImageSource("data:image/png;base64,YQ==")'), 'data:image/png;base64,YQ==');
+  assert.equal(run('safeImageSource("javascript:alert(1)")'), '');
+  assert.equal(run('safeImageSource("https://external.example/image.png")'), '');
+  assert.equal(run('escapeHtml(\'" onerror="alert(1)\')'), '&quot; onerror=&quot;alert(1)');
+  assert.equal(run('formatDate("2026-01-02")'), '02/01/2026');
+  assert.equal(run('formatDate("2026-01-<img src=x>")'), '');
+});

@@ -1,4 +1,5 @@
 // Pure validation: importing this module never loads files or opens connections.
+const { securityConfig } = require('./security');
 function validatePort(value, fallback) {
   if (value === undefined) return fallback;
   if (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > 65535) {
@@ -22,20 +23,23 @@ function validateEnv(env) {
   }
   const allowedOrigins = (env.ALLOWED_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean);
   for (const origin of allowedOrigins) {
-    if (origin === '*') continue;
     try {
       const url = new URL(origin);
-      if (!['http:', 'https:'].includes(url.protocol) || url.origin !== origin) throw new Error();
+      if (!['http:', 'https:'].includes(url.protocol) || url.origin !== origin || origin.includes('*') ||
+          (nodeEnv === 'production' && url.protocol !== 'https:')) throw new Error();
     } catch {
-      errors.push('ALLOWED_ORIGINS must contain comma-separated HTTP(S) origins or *.');
+      errors.push('ALLOWED_ORIGINS must contain explicit HTTP(S) origins (HTTPS in production); wildcards are forbidden.');
       break;
     }
   }
+  if (nodeEnv === 'production' && !allowedOrigins.length) errors.push('ALLOWED_ORIGINS is required in production.');
+  let security;
+  try { security = securityConfig(env); } catch (error) { errors.push(error.message); }
   if (errors.length) {
     throw new Error(`Invalid environment configuration:\n- ${errors.join('\n- ')}\nSee .env.example for setup instructions.`);
   }
   return {
-    port, nodeEnv, allowedOrigins,
+    port, nodeEnv, allowedOrigins, ...security,
     warnings: !env.GEMINI_API_KEY || !env.GEMINI_API_KEY.trim()
       ? ['GEMINI_API_KEY is missing; PDF rate-card parsing is unavailable. Set it to enable this feature.'] : []
   };

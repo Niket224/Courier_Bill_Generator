@@ -1,5 +1,11 @@
 # Production hardening plan for one operator
 
+Phase 1 security and single-operator authentication are implemented; see
+[the security guide](security-and-authentication.md). Access control, strict CORS,
+CSRF, MongoDB-backed sessions, upload/security dependency updates and cache
+exclusions are complete. Persistence feedback and the remaining items below
+are still pending; this is not authorization to deploy.
+
 Phase 0 provides architecture documentation, isolated automated tests, safe
 environment examples and a testable Express app factory. It does not declare the
 application production-ready. Preserve the present layout and working workflows.

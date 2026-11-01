@@ -1,0 +1,99 @@
+
+> courier-bill-generator@1.0.0 test:coverage
+> node scripts/run-tests.mjs coverage
+
+✔ defaults and missing optional Gemini configuration (4.3907ms)
+✔ configured values and dummy credentials do not need network access (3.1615ms)
+✔ required configuration is validated even in test mode (2.8293ms)
+✔ aggregated errors identify variables without exposing supplied values (0.7915ms)
+✔ MongoDB URI requires a scheme and host (1.2375ms)
+✔ ports accept boundaries and reject malformed, blank, and out-of-range values (0.4936ms)
+✔ CORS entries must be origins (0.5596ms)
+✔ blank Gemini key warns without preventing startup (0.2722ms)
+✔ frontend server exits before listening when PORT is invalid (221.3654ms)
+✔ health, missing route, and input validation (1844.407ms)
+✔ rate upsert, fallback priority, minimum weight and rounding (236.3339ms)
+✔ invoice computation, upsert, pagination, search and retrieval (131.3371ms)
+✔ successful admin login, session check, fixation prevention and cookie flags (490.8351ms)
+✔ incorrect password and unknown user have the same generic error (960.1831ms)
+✔ missing or malformed login credentials return 400 (93.1102ms)
+✔ invalid session and unsigned cookies return 401 (14.5926ms)
+✔ expired session is rejected before MongoDB TTL cleanup (464.3092ms)
+✔ sessions survive app recreation but credential changes revoke them (526.5308ms)
+✔ logout destroys session and old cookies cannot be replayed (520.8369ms)
+✔ unauthenticated GET /api/invoices returns 401 (8.118ms)
+✔ unauthenticated GET /api/invoices/search returns 401 (10.5441ms)
+✔ unauthenticated GET /api/invoices/TEST-100 returns 401 (8.3585ms)
+✔ unauthenticated POST /api/invoices/save returns 401 (8.6955ms)
+✔ unauthenticated GET /api/rates returns 401 (6.4182ms)
+✔ unauthenticated POST /api/rates returns 401 (9.7269ms)
+✔ unauthenticated POST /api/rates/calculate returns 401 (6.2206ms)
+✔ unauthenticated POST /api/rates/parse-pdf returns 401 (6.5977ms)
+✔ login and private writes require session-bound CSRF tokens (1058.8308ms)
+✔ explicit allowed CORS origin supports credentialed preflight (6.9341ms)
+✔ disallowed origins including arbitrary Vercel domains and null are rejected (18.4382ms)
+✔ authentication rate limit blocks repeated attempts (36.338ms)
+✔ PDF upload is authenticated, CSRF protected and rate limited without Gemini calls (512.5746ms)
+✔ malformed and oversized JSON return safe errors (27.3055ms)
+✔ security headers, no-store, and production Secure cookies (18.7843ms)
+✔ production API errors do not leak secrets or stack traces (489.4284ms)
+✔ single-account limiter also applies across independent login sessions (38.4891ms)
+✔ password hashing concurrency is bounded for the single operator (459.5262ms)
+✔ upgraded upload middleware rejects excess files and oversized PDF safely (585.6444ms)
+✔ Gemini failures never leak provider credentials or documents (478.8638ms)
+✔ invalid Gemini output is redacted, and synthetic valid PDF extraction still works (502.6038ms)
+✔ session store failures fail closed with a generic API error (492.1873ms)
+✔ base charge, excess kilograms, pieces, and normalized rate lookup (10.6442ms)
+✔ manual amount and missing-rate status (5.033ms)
+✔ fuel and split GST are applied to the expected bases (4.3171ms)
+✔ bulk input and invoice numbering (3.7066ms)
+✔ imported image sources and HTML attributes cannot inject executable markup (2.9837ms)
+✔ both launchers use an environment that strips credentials and loaders (10.3565ms)
+✔ test database configuration fails closed (1.3892ms)
+✔ only a generated loopback URI is accepted (1.1515ms)
+✔ production connector and entry point refuse test mode before reading dotenv (1390.2555ms)
+✔ QA wrapper propagates an actual assertion failure as exit 1 (2782.5506ms)
+✔ scrypt uses random salts, verifies correct passwords and rejects invalid inputs (2152.9469ms)
+✔ security environment rejects missing and unsafe values without echoing them (1.2463ms)
+✔ production CORS rejects wildcard, absent origins and insecure schemes (0.9664ms)
+✔ service worker never intercepts authenticated API or external responses (3.6966ms)
+✔ app factory fails closed without security configuration or a session store (1593.1994ms)
+✔ credential helper refuses noninteractive input without printing a password (115.5074ms)
+ℹ tests 57
+ℹ suites 0
+ℹ pass 57
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 13389.849
+ℹ start of coverage report
+ℹ ---------------------------------------------------------------------------------------------------------------------------
+ℹ file                     | line % | branch % | funcs % | uncovered lines
+ℹ ---------------------------------------------------------------------------------------------------------------------------
+ℹ server                   |        |          |         | 
+ℹ  app.js                  | 100.00 |    91.30 |  100.00 | 
+ℹ  config                  |        |          |         | 
+ℹ   db.js                  |  37.14 |    66.67 |   33.33 | 11-32
+ℹ   env.js                 | 100.00 |   100.00 |  100.00 | 
+ℹ   security.js            | 100.00 |    94.44 |  100.00 | 
+ℹ   test-db.js             | 100.00 |   100.00 |  100.00 | 
+ℹ  models                  |        |          |         | 
+ℹ   Invoice.js             | 100.00 |   100.00 |  100.00 | 
+ℹ   Rate.js                | 100.00 |   100.00 |  100.00 | 
+ℹ   Shipment.js            | 100.00 |   100.00 |  100.00 | 
+ℹ  routes                  |        |          |         | 
+ℹ   aiRoutes.js            |  89.27 |    52.63 |   92.31 | 28-30 67-68 96-98 102-113 116-118 128-129 149-150 190-191 215-219
+ℹ   invoiceRoutes.js       |  88.77 |    52.73 |  100.00 | 37-41 107-108 150-151 179-197 247-248 281-282
+ℹ   rateRoutes.js          |  93.14 |    83.72 |  100.00 | 23-27 132-133 169-173 200-201
+ℹ  scripts                 |        |          |         | 
+ℹ   hash-admin-password.js |  22.58 |    75.00 |   66.67 | 6-29
+ℹ  security                |        |          |         | 
+ℹ   auth.js                | 100.00 |    96.00 |  100.00 | 
+ℹ   password.js            | 100.00 |   100.00 |  100.00 | 
+ℹ   store.js               | 100.00 |    75.00 |  100.00 | 
+ℹ  server.js               |  18.18 |    50.00 |    0.00 | 5-22
+ℹ ---------------------------------------------------------------------------------------------------------------------------
+ℹ all files                |  89.25 |    77.88 |   87.88 | 
+ℹ ---------------------------------------------------------------------------------------------------------------------------
+ℹ end of coverage report

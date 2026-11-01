@@ -1,0 +1,108 @@
+
+> courier-bill-generator@1.0.0 test
+> npm run test:unit && npm run test:integration && npm run test:e2e
+
+
+> courier-bill-generator@1.0.0 test:unit
+> node scripts/run-tests.mjs unit
+
+✔ defaults and missing optional Gemini configuration (3.6707ms)
+✔ configured values and dummy credentials do not need network access (0.8394ms)
+✔ required configuration is validated even in test mode (0.9381ms)
+✔ aggregated errors identify variables without exposing supplied values (0.594ms)
+✔ MongoDB URI requires a scheme and host (2.1301ms)
+✔ ports accept boundaries and reject malformed, blank, and out-of-range values (0.526ms)
+✔ CORS entries must be origins (0.5322ms)
+✔ blank Gemini key warns without preventing startup (0.248ms)
+✔ frontend server exits before listening when PORT is invalid (187.2875ms)
+✔ base charge, excess kilograms, pieces, and normalized rate lookup (8.4766ms)
+✔ manual amount and missing-rate status (5.2205ms)
+✔ fuel and split GST are applied to the expected bases (6.4448ms)
+✔ bulk input and invoice numbering (3.637ms)
+✔ imported image sources and HTML attributes cannot inject executable markup (3.0113ms)
+✔ both launchers use an environment that strips credentials and loaders (7.3803ms)
+✔ test database configuration fails closed (1.1378ms)
+✔ only a generated loopback URI is accepted (2.7027ms)
+✔ production connector and entry point refuse test mode before reading dotenv (1480.0691ms)
+✔ QA wrapper propagates an actual assertion failure as exit 1 (2242.8368ms)
+✔ scrypt uses random salts, verifies correct passwords and rejects invalid inputs (2020.4068ms)
+✔ security environment rejects missing and unsafe values without echoing them (3.7447ms)
+✔ production CORS rejects wildcard, absent origins and insecure schemes (1.689ms)
+✔ service worker never intercepts authenticated API or external responses (2.6637ms)
+✔ app factory fails closed without security configuration or a session store (1844.8103ms)
+✔ credential helper refuses noninteractive input without printing a password (113.577ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 25
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4299.4924
+
+> courier-bill-generator@1.0.0 test:integration
+> node scripts/run-tests.mjs integration
+
+✔ health, missing route, and input validation (1882.3086ms)
+✔ rate upsert, fallback priority, minimum weight and rounding (189.4131ms)
+✔ invoice computation, upsert, pagination, search and retrieval (106.7369ms)
+✔ successful admin login, session check, fixation prevention and cookie flags (486.6632ms)
+✔ incorrect password and unknown user have the same generic error (962.864ms)
+✔ missing or malformed login credentials return 400 (83.0737ms)
+✔ invalid session and unsigned cookies return 401 (13.4729ms)
+✔ expired session is rejected before MongoDB TTL cleanup (532.6619ms)
+✔ sessions survive app recreation but credential changes revoke them (474.1038ms)
+✔ logout destroys session and old cookies cannot be replayed (448.1778ms)
+✔ unauthenticated GET /api/invoices returns 401 (7.4349ms)
+✔ unauthenticated GET /api/invoices/search returns 401 (5.8354ms)
+✔ unauthenticated GET /api/invoices/TEST-100 returns 401 (5.3091ms)
+✔ unauthenticated POST /api/invoices/save returns 401 (9.8011ms)
+✔ unauthenticated GET /api/rates returns 401 (5.6825ms)
+✔ unauthenticated POST /api/rates returns 401 (9.2564ms)
+✔ unauthenticated POST /api/rates/calculate returns 401 (5.8008ms)
+✔ unauthenticated POST /api/rates/parse-pdf returns 401 (12.1328ms)
+✔ login and private writes require session-bound CSRF tokens (1001.3191ms)
+✔ explicit allowed CORS origin supports credentialed preflight (6.2485ms)
+✔ disallowed origins including arbitrary Vercel domains and null are rejected (25.4971ms)
+✔ authentication rate limit blocks repeated attempts (36.0856ms)
+✔ PDF upload is authenticated, CSRF protected and rate limited without Gemini calls (616.621ms)
+✔ malformed and oversized JSON return safe errors (28.3629ms)
+✔ security headers, no-store, and production Secure cookies (17.179ms)
+✔ production API errors do not leak secrets or stack traces (530.526ms)
+✔ single-account limiter also applies across independent login sessions (32.1354ms)
+✔ password hashing concurrency is bounded for the single operator (494.7642ms)
+✔ upgraded upload middleware rejects excess files and oversized PDF safely (510.9683ms)
+✔ Gemini failures never leak provider credentials or documents (484.4282ms)
+✔ invalid Gemini output is redacted, and synthetic valid PDF extraction still works (560.6206ms)
+✔ session store failures fail closed with a generic API error (494.3692ms)
+ℹ tests 32
+ℹ suites 0
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 14071.2807
+
+> courier-bill-generator@1.0.0 test:e2e
+> node scripts/qa_mobile_app.mjs
+
+
+Running 14 tests using 1 worker
+
+  ok  1 [desktop] › tests\e2e\auth.spec.cjs:28:1 › authorized login → billing → saved MongoDB invoice → history → logout (1.9s)
+  ok  2 [desktop] › tests\e2e\auth.spec.cjs:56:1 › incorrect login shows an understandable error and clears password (1.2s)
+  ok  3 [desktop] › tests\e2e\auth.spec.cjs:65:1 › API session expiry returns to login without losing draft (1.3s)
+  ok  4 [desktop] › tests\e2e\auth.spec.cjs:72:1 › absolute session timer locks the frontend (1.3s)
+  ok  5 [desktop] › tests\e2e\billing.spec.cjs:18:1 › load, edit weight, persist locally, and render invoice (583ms)
+  ok  6 [desktop] › tests\e2e\billing.spec.cjs:37:1 › add shipment, warn for missing rates, and open history safely (547ms)
+  ok  7 [desktop] › tests\e2e\billing.spec.cjs:52:1 › PDF review escapes untrusted fields and supports deleting a review row (804ms)
+  ok  8 [mobile] › tests\e2e\auth.spec.cjs:28:1 › authorized login → billing → saved MongoDB invoice → history → logout (1.9s)
+  ok  9 [mobile] › tests\e2e\auth.spec.cjs:56:1 › incorrect login shows an understandable error and clears password (1.3s)
+  ok 10 [mobile] › tests\e2e\auth.spec.cjs:65:1 › API session expiry returns to login without losing draft (1.3s)
+  ok 11 [mobile] › tests\e2e\auth.spec.cjs:72:1 › absolute session timer locks the frontend (1.3s)
+  ok 12 [mobile] › tests\e2e\billing.spec.cjs:18:1 › load, edit weight, persist locally, and render invoice (540ms)
+  ok 13 [mobile] › tests\e2e\billing.spec.cjs:37:1 › add shipment, warn for missing rates, and open history safely (546ms)
+  ok 14 [mobile] › tests\e2e\billing.spec.cjs:52:1 › PDF review escapes untrusted fields and supports deleting a review row (803ms)
+
+  14 passed (23.1s)

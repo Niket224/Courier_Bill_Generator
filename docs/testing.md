@@ -63,11 +63,12 @@ on an existing server. Missing configuration and unsupported/download-failed
 MongoDB fail the command. No production credentials or existing invoice data are
 required or modified.
 
-Playwright starts a dedicated static server on 4187 and refuses to reuse an
-existing server. Each test gets a fresh context seeded with synthetic state.
-Service workers are blocked; API requests are fulfilled in-process and all other
-non-test-origin traffic is blocked. Browser E2E verifies UI behavior, not a live
-browser-to-database roundtrip. Supertest covers the real API/database path separately.
+Playwright starts a dedicated static server on 4187 and a disposable MongoDB-backed
+API on 4188, refusing to reuse existing servers. Each test gets a fresh context
+seeded with synthetic state. Service workers are blocked. Baseline tests mock API
+responses; authentication tests forward only the expected local API requests to
+4188 and exercise real sessions, CSRF and saved history. Other external traffic is
+blocked. Provider tests mock the Gemini SDK before extraction and never call Gemini.
 Screenshots/results are ignored; do not use customer data in fixtures or reports.
 
 ## Launching locally
@@ -81,16 +82,17 @@ npm run dev
 npm start --prefix server
 ```
 
-The frontend works locally without backend secrets; history and AI require the
-backend. Tests use no Gemini key and never call Gemini. NODE_ENV=test is reserved
+The frontend now requires operator login through the backend; initialize credentials
+using [the security setup guide](security-and-authentication.md). Tests use only
+synthetic credentials and mocked Gemini responses. NODE_ENV=test is reserved
 for the harness; it cannot start the normal backend. Environment values in the
 shell override dotenv. See the root and server examples for all application variables.
 
 ## Limitations
 
 Browser tests block service workers, so offline caching needs a separate future
-suite. Real AI extraction, physical printing, restore/export roundtrips and a
-live UI/API/database roundtrip are not covered yet. Backend coverage does
+suite. Real AI extraction, physical printing and restore/export roundtrips are
+not covered yet. The authenticated UI/API/database path is now tested. Backend coverage does
 not measure the VM browser script or modules that were never loaded.
 Do not treat it as total application coverage. Test failures propagate as nonzero exits; no unconditional
 process.exit(0) remains in the QA wrapper.

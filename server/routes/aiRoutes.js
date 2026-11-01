@@ -7,7 +7,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB limit
+  limits: { fileSize: 10 * 1024 * 1024, files: 1, fields: 5, parts: 6 }, // 10 MB limit
   fileFilter: (req, file, cb) => {
     if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
       cb(null, true);
@@ -56,24 +56,8 @@ function isModelFallbackError(error) {
   return isRetryableGeminiError(error) || /404|not found|no longer available|deprecated/i.test(errorText);
 }
 
-function logGeminiError(error, modelName, attemptNumber, totalAttempts) {
-  const innerError = error?.cause || error?.error?.cause;
-
-  console.error('Gemini generateContent error:', {
-    model: modelName,
-    attempt: `${attemptNumber}/${totalAttempts}`,
-    name: error?.name,
-    status: getGeminiErrorStatus(error),
-    message: error?.message,
-    statusText: error?.statusText,
-    innerName: innerError?.name,
-    innerMessage: innerError?.message,
-    innerCode: innerError?.code
-  });
-
-  if (/fetch failed/i.test(getGeminiErrorText(error))) {
-    console.error('Gemini fetch failed inner error:', innerError || error);
-  }
+function logGeminiError() {
+  console.warn('Gemini request failed; provider details withheld.');
 }
 
 async function callGeminiWithRetry(contents, maxRetries = 3) {
@@ -196,9 +180,9 @@ function handlePdfUpload(req, res, next) {
         if (err.code === 'LIMIT_FILE_SIZE') {
           return res.status(400).json({ success: false, error: 'File size exceeds maximum limit of 10MB' });
         }
-        return res.status(400).json({ success: false, error: `Upload error: ${err.message}` });
+        return res.status(400).json({ success: false, error: 'Invalid PDF upload.' });
       }
-      return res.status(400).json({ success: false, error: err.message });
+      return res.status(400).json({ success: false, error: 'Invalid PDF upload.' });
     }
 
     // Fallback if field name was 'file' instead of 'pdf'
@@ -297,7 +281,7 @@ Return ONLY valid JSON matching this schema:
     try {
       result = await callGeminiWithRetry([prompt, pdfPart]);
     } catch (geminiError) {
-      console.error('Gemini API call failed after retries and model fallback:', geminiError);
+      console.error('Gemini API request failed.');
       throw geminiError;
     }
     const response = await result.response;
@@ -309,11 +293,10 @@ Return ONLY valid JSON matching this schema:
       const cleanJsonText = responseText.replace(/```json\s*/gi, '').replace(/```\s*$/gi, '').trim();
       parsedJson = JSON.parse(cleanJsonText);
     } catch (parseError) {
-      console.error('Failed to parse Gemini output as JSON:', responseText);
+      console.error('Gemini returned invalid structured data.');
       return res.status(422).json({
         success: false,
-        error: 'Failed to parse Gemini LLM response into structured JSON',
-        rawOutput: responseText
+        error: 'Could not interpret the PDF. Please review the document and try again.'
       });
     }
 
@@ -326,7 +309,7 @@ Return ONLY valid JSON matching this schema:
     });
 
   } catch (error) {
-    console.error('Error parsing PDF with Gemini:', error);
+    console.error('PDF processing failed.');
     next(error);
   }
 });

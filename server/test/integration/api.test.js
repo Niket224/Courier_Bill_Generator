@@ -9,7 +9,13 @@ const request = require('supertest');
 const { createApp } = require('../../app');
 const Rate = require('../../models/Rate');
 const Invoice = require('../../models/Invoice');
-const app = createApp();
+const { createSessionStore } = require('../../security/store');
+const { authConfig, password } = require('../../../tests/fixtures/auth.cjs');
+let app, store, config, agent, csrfToken;
+const api = {
+  get: (url) => agent.get(url),
+  post: (url) => agent.post(url).set('X-CSRF-Token', csrfToken)
+};
 let mongo;
 before(async (context) => {
   const dbName = `courier_test_${randomUUID().replaceAll('-', '')}`;
@@ -22,50 +28,266 @@ before(async (context) => {
   assertOwnedUri(uri, dbName);
   await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
   await Promise.all([Rate.init(), Invoice.init()]);
+  config = await authConfig();
+  store = createSessionStore(Promise.resolve(mongoose.connection.getClient()), config);
+  // Tests intentionally construct many apps against the same disposable store.
+  store.setMaxListeners(100);
+  await store.collectionP;
+  app = createApp(config, { sessionStore: store });
+  agent = request.agent(app);
+  const challenge = await agent.get('/api/auth/csrf').expect(200);
+  const login = await agent.post('/api/auth/login').set('X-CSRF-Token', challenge.body.csrfToken)
+    .send({ username: config.adminUsername, password }).expect(200);
+  csrfToken = login.body.csrfToken;
 }, { timeout: 900000 });
 after(async () => {
   await mongoose.disconnect();
   if (mongo) await mongo.stop();
 });
 test('health, missing route, and input validation', async () => {
-  assert.equal((await request(app).get('/api/health').expect(200)).body.status, 'ok');
-  await request(app).get('/api/not-found').expect(404);
-  await request(app).post('/api/rates/calculate').send({}).expect(400);
-  await request(app).post('/api/invoices/save').send({}).expect(400);
-  await request(app).post('/api/rates/parse-pdf').expect(400);
+  assert.equal((await api.get('/api/health').expect(200)).body.status, 'ok');
+  await api.get('/api/not-found').expect(404);
+  await api.post('/api/rates/calculate').send({}).expect(400);
+  await api.post('/api/invoices/save').send({}).expect(400);
+  await api.post('/api/rates/parse-pdf').expect(400);
 });
 test('rate upsert, fallback priority, minimum weight and rounding', async () => {
   for (const [targetType, targetName, perKgRate] of [['DEFAULT', 'default', 50], ['REGION', 'east_india', 40], ['STATE', 'bihar', 30], ['CITY', 'patna', 15.25]]) {
-    await request(app).post('/api/rates').send({ shipperCode: 'TEST', baseKg: 3, targetType, targetName, perKgRate }).expect(201);
+    await api.post('/api/rates').send({ shipperCode: 'TEST', baseKg: 3, targetType, targetName, perKgRate }).expect(201);
   }
   for (const [destination, rule, amount] of [[' patna ', 'CITY', 45.75], ['gaya', 'STATE', 90], ['ranchi', 'REGION', 120], ['unknown', 'DEFAULT', 150]]) {
-    const result = await request(app).post('/api/rates/calculate').send({ shipperCode: ' test ', destination, weight: 1 }).expect(200);
+    const result = await api.post('/api/rates/calculate').send({ shipperCode: ' test ', destination, weight: 1 }).expect(200);
     assert.equal(result.body.matchedRule, rule);
     assert.equal(result.body.calculatedAmount, amount);
     assert.equal(result.body.chargedWeight, 3);
   }
-  const excess = await request(app).post('/api/rates/calculate').send({ shipperCode: 'TEST', destination: 'patna', weight: 3.333 }).expect(200);
+  const excess = await api.post('/api/rates/calculate').send({ shipperCode: 'TEST', destination: 'patna', weight: 3.333 }).expect(200);
   assert.equal(excess.body.calculatedAmount, 50.83);
-  await request(app).post('/api/rates').send({ shipperCode: 'TEST', targetType: 'CITY', targetName: 'patna', perKgRate: 16, baseKg: 3 }).expect(201);
-  assert.equal((await request(app).get('/api/rates?shipperCode=test').expect(200)).body.count, 4);
-  await request(app).post('/api/rates/calculate').send({ shipperCode: 'MISSING', destination: 'patna', weight: 1 }).expect(404);
+  await api.post('/api/rates').send({ shipperCode: 'TEST', targetType: 'CITY', targetName: 'patna', perKgRate: 16, baseKg: 3 }).expect(201);
+  assert.equal((await api.get('/api/rates?shipperCode=test').expect(200)).body.count, 4);
+  await api.post('/api/rates/calculate').send({ shipperCode: 'MISSING', destination: 'patna', weight: 1 }).expect(404);
 });
 test('invoice computation, upsert, pagination, search and retrieval', async () => {
   const payload = { invoiceNumber: ' test-100 ', shipperCode: ' test ', clientName: 'Synthetic Customer',
     invoiceDate: '2026-01-02', shipments: [{ cno: 'TEST-AWB', date: '2026-01-02', weight: 2, amount: 100 }] };
-  const saved = await request(app).post('/api/invoices/save').send(payload).expect(201);
+  const saved = await api.post('/api/invoices/save').send(payload).expect(201);
   assert.equal(saved.body.data.invoiceNumber, 'TEST-100');
   assert.equal(saved.body.data.subtotal, 100);
   assert.equal(saved.body.data.taxAmount, 18);
   assert.equal(saved.body.data.totalAmount, 118);
   assert.equal(saved.body.data.shipments[0].awb, 'TEST-AWB');
-  await request(app).post('/api/invoices/save').send({ ...payload, status: 'PAID' }).expect(201);
+  await api.post('/api/invoices/save').send({ ...payload, status: 'PAID' }).expect(201);
   assert.equal(await Invoice.countDocuments(), 1);
-  const list = await request(app).get('/api/invoices?shipperCode=test&status=paid&limit=1').expect(200);
+  const list = await api.get('/api/invoices?shipperCode=test&status=paid&limit=1').expect(200);
   assert.equal(list.body.pagination.total, 1);
-  const search = await request(app).get('/api/invoices/search?q=TEST-AWB&startDate=2026-01-01&endDate=2026-01-31').expect(200);
+  const search = await api.get('/api/invoices/search?q=TEST-AWB&startDate=2026-01-01&endDate=2026-01-31').expect(200);
   assert.equal(search.body.count, 1);
-  await request(app).get('/api/invoices/TEST-100').expect(200);
-  await request(app).get(`/api/invoices/${saved.body.data._id}`).expect(200);
-  await request(app).get('/api/invoices/MISSING').expect(404);
+  await api.get('/api/invoices/TEST-100').expect(200);
+  await api.get(`/api/invoices/${saved.body.data._id}`).expect(200);
+  await api.get('/api/invoices/MISSING').expect(404);
+});
+
+function fresh(overrides = {}, limits = {}) {
+  return createApp({ ...config, ...overrides }, { sessionStore: store, limits });
+}
+async function signIn(target = fresh(), credentials = { username: 'test-admin', password }) {
+  const client = request.agent(target);
+  const challenge = await client.get('/api/auth/csrf').expect(200);
+  const response = await client.post('/api/auth/login').set('X-CSRF-Token', challenge.body.csrfToken).send(credentials);
+  return { client, response, token: response.body.csrfToken, challenge };
+}
+test('successful admin login, session check, fixation prevention and cookie flags', async () => {
+  const { client, response, challenge } = await signIn();
+  assert.equal(response.status, 200);
+  assert.notEqual(response.headers['set-cookie'][0].split(';')[0], challenge.headers['set-cookie'][0].split(';')[0]);
+  assert.notEqual(response.body.csrfToken, challenge.body.csrfToken);
+  assert.match(response.headers['set-cookie'][0], /HttpOnly/);
+  assert.match(response.headers['set-cookie'][0], /SameSite=Lax/);
+  assert.ok(!JSON.stringify(response.body).includes(password));
+  assert.equal((await client.get('/api/auth/session').expect(200)).body.authenticated, true);
+});
+test('incorrect password and unknown user have the same generic error', async () => {
+  const wrong = await signIn(fresh(), { username: 'test-admin', password: 'wrong-password' });
+  const unknown = await signIn(fresh(), { username: 'unknown', password });
+  assert.equal(wrong.response.status, 401);
+  assert.equal(unknown.response.status, 401);
+  assert.deepEqual(wrong.response.body, unknown.response.body);
+});
+test('missing or malformed login credentials return 400', async () => {
+  for (const credentials of [{}, { username: 'test-admin' }, { username: {}, password }, { username: 'test-admin', password: ['bad'] }]) {
+    assert.equal((await signIn(fresh(), credentials)).response.status, 400);
+  }
+});
+test('invalid session and unsigned cookies return 401', async () => {
+  await request(app).get('/api/auth/session').set('Cookie', 'courier.sid=forged').expect(401);
+  await request(app).get('/api/invoices').set('Cookie', 'courier.sid=s%3Afake.invalid').expect(401);
+});
+test('expired session is rejected before MongoDB TTL cleanup', async () => {
+  const { response } = await signIn();
+  const cookie = response.headers['set-cookie'][0].split(';')[0];
+  const sid = decodeURIComponent(cookie.split('=')[1]).slice(2).split('.')[0];
+  const id = require('node:crypto').createHash('sha256').update(sid).digest('hex');
+  const collection = await store.collectionP;
+  const row = await collection.findOne({ _id: id });
+  const data = JSON.parse(row.session);
+  data.expiresAt = Date.now() - 1;
+  await collection.updateOne({ _id: id }, { $set: { session: JSON.stringify(data) } });
+  await request(fresh()).get('/api/invoices').set('Cookie', cookie).expect(401);
+});
+test('sessions survive app recreation but credential changes revoke them', async () => {
+  const { response } = await signIn();
+  const cookie = response.headers['set-cookie'][0].split(';')[0];
+  await request(fresh()).get('/api/auth/session').set('Cookie', cookie).expect(200);
+  await request(fresh({ adminUsername: 'changed-admin' })).get('/api/auth/session').set('Cookie', cookie).expect(401);
+});
+test('logout destroys session and old cookies cannot be replayed', async () => {
+  const target = fresh();
+  const { client, response, token } = await signIn(target);
+  const cookie = response.headers['set-cookie'][0].split(';')[0];
+  const logout = await client.post('/api/auth/logout').set('X-CSRF-Token', token).expect(200);
+  assert.match(logout.headers['set-cookie'][0], /Expires=Thu, 01 Jan 1970/);
+  await request(target).get('/api/auth/session').set('Cookie', cookie).expect(401);
+});
+for (const [method, url] of [['get', '/api/invoices'], ['get', '/api/invoices/search'], ['get', '/api/invoices/TEST-100'],
+  ['post', '/api/invoices/save'], ['get', '/api/rates'], ['post', '/api/rates'],
+  ['post', '/api/rates/calculate'], ['post', '/api/rates/parse-pdf']]) {
+  test(`unauthenticated ${method.toUpperCase()} ${url} returns 401`, async () => {
+    await request(app)[method](url).expect(401);
+  });
+}
+test('login and private writes require session-bound CSRF tokens', async () => {
+  const target = fresh();
+  await request(target).post('/api/auth/login').send({ username: 'test-admin', password }).expect(403);
+  const { client, token, challenge } = await signIn(target);
+  await client.post('/api/invoices/save').send({}).expect(403);
+  await client.post('/api/rates').set('X-CSRF-Token', 'f'.repeat(64)).send({}).expect(403);
+  await client.post('/api/auth/logout').set('X-CSRF-Token', challenge.body.csrfToken).expect(403);
+  const other = await signIn(target);
+  await other.client.post('/api/rates').set('X-CSRF-Token', token).send({}).expect(403);
+  await client.post('/api/invoices/save').set('X-CSRF-Token', token).send({}).expect(400);
+});
+test('explicit allowed CORS origin supports credentialed preflight', async () => {
+  const response = await request(app).options('/api/invoices/save').set('Origin', 'https://billing.example.test')
+    .set('Access-Control-Request-Method', 'POST').set('Access-Control-Request-Headers', 'Content-Type,X-CSRF-Token').expect(204);
+  assert.equal(response.headers['access-control-allow-origin'], 'https://billing.example.test');
+  assert.equal(response.headers['access-control-allow-credentials'], 'true');
+});
+test('disallowed origins including arbitrary Vercel domains and null are rejected', async () => {
+  for (const origin of ['https://evil.example', 'https://arbitrary.vercel.app', 'null']) {
+    const response = await request(app).get('/api/health').set('Origin', origin).expect(403);
+    assert.equal(response.headers['access-control-allow-origin'], undefined);
+    assert.ok(!JSON.stringify(response.body).includes(origin));
+  }
+});
+test('authentication rate limit blocks repeated attempts', async () => {
+  const target = fresh({}, { login: 2 });
+  const client = request.agent(target);
+  const challenge = await client.get('/api/auth/csrf');
+  for (let i = 0; i < 2; i++) await client.post('/api/auth/login').set('X-CSRF-Token', challenge.body.csrfToken).send({}).expect(400);
+  const blocked = await client.post('/api/auth/login').set('X-CSRF-Token', challenge.body.csrfToken).send({}).expect(429);
+  assert.ok(blocked.headers['retry-after']);
+});
+test('PDF upload is authenticated, CSRF protected and rate limited without Gemini calls', async () => {
+  const { client, token } = await signIn(fresh({}, { pdf: 2 }));
+  await client.post('/api/rates/parse-pdf').expect(403);
+  await client.post('/api/rates/parse-pdf').set('X-CSRF-Token', token).expect(400);
+  await client.post('/api/rates/parse-pdf').set('X-CSRF-Token', token)
+    .attach('pdf', Buffer.from('synthetic text'), { filename: 'test.txt', contentType: 'text/plain' }).expect(400);
+  await client.post('/api/rates/parse-pdf').set('X-CSRF-Token', token).expect(429);
+});
+test('malformed and oversized JSON return safe errors', async () => {
+  const bad = await request(app).post('/api/auth/login').set('Content-Type', 'application/json').send('{"secret":"do-not-echo",').expect(400);
+  assert.equal(bad.body.error, 'Invalid request.');
+  await request(app).post('/api/auth/login').send({ password: 'x'.repeat(5000) }).expect(413);
+  await request(app).post('/api/invoices/save').send({ notes: 'x'.repeat(1024 * 1024) }).expect(413);
+});
+test('security headers, no-store, and production Secure cookies', async () => {
+  const response = await request(app).get('/api/health').expect(200);
+  assert.equal(response.headers['x-content-type-options'], 'nosniff');
+  assert.ok(response.headers['content-security-policy']);
+  assert.equal(response.headers['x-frame-options'], 'SAMEORIGIN');
+  assert.equal(response.headers['cache-control'], 'no-store');
+  assert.equal(response.headers['x-powered-by'], undefined);
+  const secure = await request(fresh({ nodeEnv: 'production', trustProxy: 'loopback' }))
+    .get('/api/auth/csrf').set('X-Forwarded-Proto', 'https').expect(200);
+  assert.match(secure.headers['set-cookie'][0], /^__Host-courier.sid=/);
+  assert.match(secure.headers['set-cookie'][0], /; Secure/);
+  assert.match(secure.headers['set-cookie'][0], /; HttpOnly/);
+  assert.ok(!secure.headers['set-cookie'][0].includes('Domain='));
+});
+test('production API errors do not leak secrets or stack traces', async () => {
+  const { client } = await signIn();
+  const find = Rate.find;
+  Rate.find = () => { throw new Error('secret-password mongodb://private-host/customer-document'); };
+  try {
+    const response = await client.get('/api/rates').expect(500);
+    assert.deepEqual(response.body, { success: false, error: 'Unable to complete request. Please try again.' });
+  } finally { Rate.find = find; }
+});
+test('single-account limiter also applies across independent login sessions', async () => {
+  const target = fresh({}, { loginGlobal: 1 });
+  assert.equal((await signIn(target, {})).response.status, 400);
+  assert.equal((await signIn(target, {})).response.status, 429);
+});
+test('password hashing concurrency is bounded for the single operator', async () => {
+  const target = fresh();
+  const clients = [request.agent(target), request.agent(target)];
+  const challenges = await Promise.all(clients.map((client) => client.get('/api/auth/csrf')));
+  const responses = await Promise.all(clients.map((client, i) => client.post('/api/auth/login')
+    .set('X-CSRF-Token', challenges[i].body.csrfToken).send({ username: 'test-admin', password })));
+  assert.deepEqual(responses.map((response) => response.status).sort(), [200, 429]);
+});
+test('upgraded upload middleware rejects excess files and oversized PDF safely', async () => {
+  const { client, token } = await signIn();
+  await client.post('/api/rates/parse-pdf').set('X-CSRF-Token', token)
+    .attach('pdf', Buffer.from('%PDF synthetic'), 'one.pdf').attach('pdf', Buffer.from('%PDF synthetic'), 'two.pdf').expect(400);
+  await client.post('/api/rates/parse-pdf').set('X-CSRF-Token', token)
+    .attach('pdf', Buffer.alloc(10 * 1024 * 1024 + 1), 'large.pdf').expect(400);
+});
+test('Gemini failures never leak provider credentials or documents', async (context) => {
+  const { GoogleGenerativeAI } = require('../../node_modules/@google/generative-ai');
+  const sentinel = 'synthetic-provider-secret-and-customer-document';
+  const messages = [];
+  context.mock.method(console, 'error', (...args) => messages.push(args.join(' ')));
+  context.mock.method(console, 'warn', (...args) => messages.push(args.join(' ')));
+  context.mock.method(console, 'log', (...args) => messages.push(args.join(' ')));
+  context.mock.method(GoogleGenerativeAI.prototype, 'getGenerativeModel', () => ({ generateContent: async () => { throw new Error(sentinel); } }));
+  const original = process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY = 'synthetic-key-not-real';
+  try {
+    const { client, token } = await signIn();
+    const response = await client.post('/api/rates/parse-pdf').set('X-CSRF-Token', token)
+      .attach('pdf', Buffer.from('%PDF synthetic fixture'), 'test.pdf').expect(500);
+    assert.ok(!JSON.stringify(response.body).includes(sentinel));
+    assert.ok(!messages.join(' ').includes(sentinel));
+  } finally { if (original === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = original; }
+});
+test('invalid Gemini output is redacted, and synthetic valid PDF extraction still works', async (context) => {
+  const { GoogleGenerativeAI } = require('../../node_modules/@google/generative-ai');
+  const logs = [];
+  for (const method of ['error', 'log', 'warn']) context.mock.method(console, method, (...args) => logs.push(args.join(' ')));
+  let output = 'synthetic-private-document-invalid-json';
+  context.mock.method(GoogleGenerativeAI.prototype, 'getGenerativeModel', () => ({
+    generateContent: async () => ({ response: { text: () => output } })
+  }));
+  const original = process.env.GEMINI_API_KEY;
+  process.env.GEMINI_API_KEY = 'synthetic-key-not-real';
+  try {
+    const { client, token } = await signIn();
+    const send = () => client.post('/api/rates/parse-pdf').set('X-CSRF-Token', token).attach('pdf', Buffer.from('%PDF synthetic fixture'), 'test.pdf');
+    const invalid = await send().expect(422);
+    assert.equal(invalid.body.rawOutput, undefined);
+    assert.ok(!JSON.stringify(invalid.body).includes(output));
+    assert.ok(!logs.join(' ').includes(output));
+    output = JSON.stringify({ clientInfo: { clientName: 'Synthetic Customer' }, rates: [{ targetName: 'patna', targetType: 'CITY', baseKg: 3, perKgRate: 15 }] });
+    const valid = await send().expect(200);
+    assert.equal(valid.body.data.rates[0].perKgRate, 15);
+  } finally { if (original === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = original; }
+});
+test('session store failures fail closed with a generic API error', async (context) => {
+  const { response } = await signIn();
+  const cookie = response.headers['set-cookie'][0].split(';')[0];
+  context.mock.method(store, 'get', (id, callback) => callback(new Error('synthetic-private-db-credential')));
+  const result = await request(app).get('/api/invoices').set('Cookie', cookie).expect(500);
+  assert.equal(result.body.error, 'Unable to complete request. Please try again.');
 });

@@ -1,4 +1,4 @@
-# Architecture (Phase 0)
+# Architecture (Phases 0–1)
 
 ## Actual stack and entry points
 
@@ -9,21 +9,23 @@ port 4173 by default. [index.html](../mobile-bill-app/index.html) loads
 [app.js](../mobile-bill-app/app.js) and [styles.css](../mobile-bill-app/styles.css).
 The manifest and service worker provide installability and asset caching.
 
-The backend is CommonJS Express 4 with cors, dotenv, Mongoose 8, Multer 1 and
-Google Generative AI SDK. [server.js](../server/server.js) loads server/.env,
+The backend is CommonJS Express 4 with cors, dotenv, Mongoose 8, Multer 2,
+express-session/connect-mongo, Helmet, express-rate-limit and Google Generative AI SDK.
+[server.js](../server/server.js) loads server/.env,
 validates configuration, connects MongoDB, then listens on port 5000.
 [index.js](../server/index.js) re-exports that entry point. Phase 0 moves Express
 assembly into [createApp](../server/app.js), which opens no connection or listener
-and reads no environment files. Routes and middleware behavior are preserved.
+and reads no environment files. It now requires validated security configuration
+and an explicit session store. Private routes require operator authentication and CSRF.
 The normal entry and production database connector reject test mode.
 
-No deployment manifest, CI workflow, container definition, authentication layer,
+No deployment manifest, CI workflow, container definition,
 or reverse-proxy configuration is present. Do not infer a working serverless
-deployment from the index export or the existing Vercel CORS suffix.
+deployment from the index export. The Vercel suffix CORS exception was removed.
 
 ## Browser/API communication
 
-On localhost or 127.0.0.1 the browser calls http://localhost:5000/api; elsewhere
+On localhost or 127.0.0.1 the browser calls port 5000 on the same hostname; elsewhere
 it calls /api on the same origin. Production therefore needs an HTTPS reverse
 proxy serving the static frontend and forwarding /api to Express. Changing the
 backend PORT alone does not update the browser's local API address.
@@ -39,7 +41,9 @@ backend PORT alone does not update the browser's local API address.
 | GET /api/invoices/search | Text/AWB/date search |
 | GET /api/invoices/:id | ID or invoice-number lookup |
 
-The UI uses PDF parsing, reviewed-rate saves, invoice history, and invoice save.
+The UI uses [auth.js](../mobile-bill-app/auth.js) for cookie authentication,
+memory-only CSRF tokens, login/logout and session expiry. All API fetches include
+credentials and pass through this helper. The UI uses PDF parsing, reviewed-rate saves, invoice history, and invoice save.
 It calculates current bills locally rather than calling /rates/calculate.
 
 ## Data ownership
@@ -51,7 +55,8 @@ It calculates current bills locally rather than calling /rates/calculate.
 | MongoDB Invoice | Unique invoice number, shipper/client details, embedded shipment snapshots, totals, tax, dates, status and notes. Save is an upsert. History reads these documents. |
 | MongoDB Client | Unique shipper code, name, GST and address. Model exists; no client API in this repository. |
 | MongoDB Shipment | Standalone model plus reusable embedded schema; invoice routes use embedded shipments, not standalone shipment writes. |
-| Service-worker cache | Versioned static assets and successful same-origin GET responses. It can include /api responses in same-origin deployments. |
+| MongoDB operator_sessions | Signed-cookie server sessions with hashed IDs, absolute expiry and a TTL index. No plaintext operator password. |
+| Service-worker cache | Allowlisted versioned static assets only; API/auth responses are excluded. |
 
 No automatic reconciliation connects browser drafts and database history.
 Existing default data contains business/customer-like information. Tests use only
@@ -68,5 +73,6 @@ not a single authoritative calculation. Phase 0 characterizes valid inputs witho
 endorsing their inconsistencies or invalid-input coercion.
 
 Tests use Node's built-in runner, Supertest, disposable MongoDB, and Playwright.
-No frontend rewrite or business-data migration is included. The app factory is
-the only structural backend change needed for isolated API testing.
+No frontend rewrite or business-data migration is included. See
+[security and authentication](security-and-authentication.md) for Phase 1 design,
+credential provisioning, limits, cookie/proxy configuration and remaining risks.
