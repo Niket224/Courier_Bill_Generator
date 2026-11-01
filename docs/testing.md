@@ -1,5 +1,13 @@
 # Testing and local setup
 
+Phase 2 results and all executed test names are recorded in
+[the Phase 2 report](phase2-report.md) and [test output](phase2-test-results.txt).
+The original Phase 0 verification below is historical. Invoice tests now use
+request IDs/revisions and explicit lifecycle actions rather than unsafe upserts.
+New browser cases simulate rejected responses, timeout/offline transport, lost
+acknowledgements after real commits, duplicate clicks, archival recovery and
+clearing private DOM. No Phase 1 protection is bypassed in live API tests.
+
 ## Clean checkout
 
 Use Node.js 24 (validated with 24.22.1) and npm 11. Run from the repository root:

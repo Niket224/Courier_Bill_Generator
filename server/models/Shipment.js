@@ -2,6 +2,11 @@ const mongoose = require('mongoose');
 
 const shipmentSchema = new mongoose.Schema(
   {
+    sourceId: String,
+    pcs: { type: Number, min: 1 },
+    type: String,
+    manualAmount: { type: Number, min: 0, default: null },
+    rateSnapshot: { baseKg: Number, baseRate: Number, perKgRate: Number },
     invoiceId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Invoice',

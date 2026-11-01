@@ -1,0 +1,166 @@
+
+> courier-bill-generator@1.0.0 test
+> npm run test:unit && npm run test:integration && npm run test:e2e
+
+
+> courier-bill-generator@1.0.0 test:unit
+> node scripts/run-tests.mjs unit
+
+✔ defaults and missing optional Gemini configuration (3.0382ms)
+✔ configured values and dummy credentials do not need network access (0.769ms)
+✔ required configuration is validated even in test mode (0.6981ms)
+✔ aggregated errors identify variables without exposing supplied values (0.4736ms)
+✔ MongoDB URI requires a scheme and host (0.3794ms)
+✔ ports accept boundaries and reject malformed, blank, and out-of-range values (1.5787ms)
+✔ CORS entries must be origins (0.4311ms)
+✔ blank Gemini key warns without preventing startup (0.2043ms)
+✔ frontend server exits before listening when PORT is invalid (115.2125ms)
+✔ base charge, excess kilograms, pieces, and normalized rate lookup (3.2442ms)
+✔ manual amount and missing-rate status (2.8115ms)
+✔ fuel and split GST are applied to the expected bases (3.2544ms)
+✔ bulk input and invoice numbering (3.3895ms)
+✔ imported image sources and HTML attributes cannot inject executable markup (3.1643ms)
+✔ invoice validator preserves legacy fallback arithmetic without claiming verification (2.7212ms)
+✔ strict invoice field, date, monetary and shipment validation (1.0624ms)
+✔ lifecycle validation requires version, request ID and reason (1.308ms)
+✔ browser payload preserves full snapshot, pieces, manual amount and selected rate (1.7968ms)
+✔ browser refuses incomplete/invalid invoices before a request (0.9936ms)
+✔ both launchers use an environment that strips credentials and loaders (5.1836ms)
+✔ test database configuration fails closed (0.5846ms)
+✔ only a generated loopback URI is accepted (2.2272ms)
+✔ production connector and entry point refuse test mode before reading dotenv (930.4518ms)
+✔ QA wrapper propagates an actual assertion failure as exit 1 (1414.2079ms)
+✔ scrypt uses random salts, verifies correct passwords and rejects invalid inputs (1228.9626ms)
+✔ security environment rejects missing and unsafe values without echoing them (0.9884ms)
+✔ production CORS rejects wildcard, absent origins and insecure schemes (0.6966ms)
+✔ service worker never intercepts authenticated API or external responses (1.7459ms)
+✔ app factory fails closed without security configuration or a session store (783.5781ms)
+✔ credential helper refuses noninteractive input without printing a password (73.9825ms)
+ℹ tests 30
+ℹ suites 0
+ℹ pass 30
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2271.7741
+
+> courier-bill-generator@1.0.0 test:integration
+> node scripts/run-tests.mjs integration
+
+✔ health, missing route, and input validation (985.9275ms)
+✔ rate upsert, fallback priority, minimum weight and rounding (109.799ms)
+✔ invoice computation, controlled lifecycle, pagination, search and retrieval (79.7899ms)
+✔ successful admin login, session check, fixation prevention and cookie flags (254.3582ms)
+✔ incorrect password and unknown user have the same generic error (531.4076ms)
+✔ missing or malformed login credentials return 400 (43.6989ms)
+✔ invalid session and unsigned cookies return 401 (6.3518ms)
+✔ expired session is rejected before MongoDB TTL cleanup (292.0124ms)
+✔ sessions survive app recreation but credential changes revoke them (272.7878ms)
+✔ logout destroys session and old cookies cannot be replayed (249.187ms)
+✔ unauthenticated GET /api/invoices returns 401 (2.7758ms)
+✔ unauthenticated GET /api/invoices/search returns 401 (7.9296ms)
+✔ unauthenticated GET /api/invoices/TEST-100 returns 401 (3.8003ms)
+✔ unauthenticated POST /api/invoices/save returns 401 (3.8327ms)
+✔ unauthenticated GET /api/rates returns 401 (8.2016ms)
+✔ unauthenticated POST /api/rates returns 401 (2.8465ms)
+✔ unauthenticated POST /api/rates/calculate returns 401 (2.8872ms)
+✔ unauthenticated POST /api/rates/parse-pdf returns 401 (2.9226ms)
+✔ login and private writes require session-bound CSRF tokens (589.8058ms)
+✔ explicit allowed CORS origin supports credentialed preflight (2.957ms)
+✔ disallowed origins including arbitrary Vercel domains and null are rejected (6.9319ms)
+✔ authentication rate limit blocks repeated attempts (18.9988ms)
+✔ PDF upload is authenticated, CSRF protected and rate limited without Gemini calls (276.9805ms)
+✔ malformed and oversized JSON return safe errors (13.4439ms)
+✔ security headers, no-store, and production Secure cookies (9.9052ms)
+✔ production API errors do not leak secrets or stack traces (248.8585ms)
+✔ single-account limiter also applies across independent login sessions (18.9304ms)
+✔ password hashing concurrency is bounded for the single operator (259.5805ms)
+✔ upgraded upload middleware rejects excess files and oversized PDF safely (283.5836ms)
+✔ Gemini failures never leak provider credentials or documents (304.3079ms)
+✔ invalid Gemini output is redacted, and synthetic valid PDF extraction still works (292.7433ms)
+✔ session store failures fail closed with a generic API error (272.1784ms)
+✔ identical concurrent saves are idempotent and create exactly one invoice (44.0062ms)
+✔ duplicate invoice numbers and changed idempotency payloads are rejected (34.7833ms)
+✔ draft updates use revisions and conflicting concurrent edits never partially combine (43.4902ms)
+✔ finalized and paid contents are immutable; paid and cancellation actions retain original amounts (86.0924ms)
+✔ corrections link new numbers without mutating original finalized data (25.208ms)
+✔ legacy historical documents remain readable and cannot be silently adopted or overwritten (15.2749ms)
+✔ invalid fields and failed updates leave invoice data unchanged (51.0275ms)
+✔ complete metadata and shipment snapshot survives persistence without repricing (16.0016ms)
+✔ new lifecycle endpoints retain authentication and CSRF protections (14.0521ms)
+✔ history lists stay lightweight while detail preserves reconstruction data (16.4988ms)
+✔ invoice search rejects malformed filters and treats search input literally (50.8584ms)
+✔ concurrent lifecycle retries append only one audit operation (46.923ms)
+✔ disconnected isolated database fails safely without buffering a write (294.6916ms)
+ℹ tests 45
+ℹ suites 0
+ℹ pass 45
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7527.809
+
+> courier-bill-generator@1.0.0 test:e2e
+> node scripts/qa_mobile_app.mjs
+
+
+Running 54 tests using 1 worker
+
+  ok  1 [desktop] › tests\e2e\auth.spec.cjs:30:1 › authorized login → billing → saved MongoDB invoice → history → logout (1.1s)
+  ok  2 [desktop] › tests\e2e\auth.spec.cjs:58:1 › incorrect login shows an understandable error and clears password (537ms)
+  ok  3 [desktop] › tests\e2e\auth.spec.cjs:67:1 › API session expiry returns to login without losing draft (627ms)
+  ok  4 [desktop] › tests\e2e\auth.spec.cjs:74:1 › absolute session timer locks the frontend (601ms)
+  ok  5 [desktop] › tests\e2e\auth.spec.cjs:81:1 › draft revisions, lost save acknowledgement, paid/cancelled history and linked correction (2.0s)
+  ok  6 [desktop] › tests\e2e\billing.spec.cjs:18:1 › load, edit weight, persist locally, and render invoice (390ms)
+  ok  7 [desktop] › tests\e2e\billing.spec.cjs:37:1 › add shipment, warn for missing rates, and open history safely (357ms)
+  ok  8 [desktop] › tests\e2e\billing.spec.cjs:52:1 › PDF review escapes untrusted fields and supports deleting a review row (642ms)
+  ok  9 [desktop] › tests\e2e\persistence.spec.cjs:32:3 › backend rejection preserves draft and prevents final printing (347ms)
+  ok 10 [desktop] › tests\e2e\persistence.spec.cjs:32:3 › disconnected database preserves draft and prevents final printing (339ms)
+  ok 11 [desktop] › tests\e2e\persistence.spec.cjs:32:3 › HTTP 200 success:false preserves draft and prevents final printing (355ms)
+  ok 12 [desktop] › tests\e2e\persistence.spec.cjs:32:3 › missing CSRF token preserves draft and prevents final printing (361ms)
+  ok 13 [desktop] › tests\e2e\persistence.spec.cjs:41:1 › duplicate save clicks share one request and printing waits for confirmation (302ms)
+  ok 14 [desktop] › tests\e2e\persistence.spec.cjs:55:1 › timeout is explicit and retains a stable retry request (355ms)
+  ok 15 [desktop] › tests\e2e\persistence.spec.cjs:70:1 › offline retry survives refresh and never changes the original request ID (466ms)
+  ok 16 [desktop] › tests\e2e\persistence.spec.cjs:87:1 › refresh preserves unsaved edits and New Bill archives the old work (583ms)
+  ok 17 [desktop] › tests\e2e\persistence.spec.cjs:106:1 › session expiry during save clears private DOM and keeps the retry draft (334ms)
+  ok 18 [desktop] › tests\e2e\persistence.spec.cjs:117:1 › logout removes draft and open review data from DOM, not just navigation (629ms)
+  ok 19 [desktop] › tests\e2e\persistence.spec.cjs:130:1 › incomplete invoice validation blocks requests and final printing (307ms)
+  ok 20 [desktop] › tests\e2e\persistence.spec.cjs:139:1 › unauthenticated initial page never loads private browser draft into state or DOM (197ms)
+  ok 21 [desktop] › tests\e2e\persistence.spec.cjs:147:1 › a definitive rejection permits corrected data with a fresh request ID (416ms)
+  ok 22 [desktop] › tests\e2e\persistence.spec.cjs:162:1 › corrupt local draft is retained and offered for recovery after authentication (148ms)
+  ok 23 [desktop] › tests\e2e\persistence.spec.cjs:169:1 › a cross-tab draft change archives this tab instead of silently overwriting the other draft (267ms)
+  ok 24 [desktop] › tests\e2e\persistence.spec.cjs:176:1 › New Bill refuses to clear work when its recovery archive cannot be stored (343ms)
+  ok 25 [desktop] › tests\e2e\persistence.spec.cjs:191:1 › a print-dialog error does not misreport a confirmed save as failed (373ms)
+  ok 26 [desktop] › tests\e2e\persistence.spec.cjs:199:1 › historical final printing uses recorded amounts rather than recalculating them (558ms)
+  ok 27 [desktop] › tests\e2e\persistence.spec.cjs:215:1 › legacy history can start an empty linked correction without fabricating missing shipments (405ms)
+  ok 28 [mobile] › tests\e2e\auth.spec.cjs:30:1 › authorized login → billing → saved MongoDB invoice → history → logout (1.0s)
+  ok 29 [mobile] › tests\e2e\auth.spec.cjs:58:1 › incorrect login shows an understandable error and clears password (538ms)
+  ok 30 [mobile] › tests\e2e\auth.spec.cjs:67:1 › API session expiry returns to login without losing draft (573ms)
+  ok 31 [mobile] › tests\e2e\auth.spec.cjs:74:1 › absolute session timer locks the frontend (541ms)
+  ok 32 [mobile] › tests\e2e\auth.spec.cjs:81:1 › draft revisions, lost save acknowledgement, paid/cancelled history and linked correction (1.9s)
+  ok 33 [mobile] › tests\e2e\billing.spec.cjs:18:1 › load, edit weight, persist locally, and render invoice (314ms)
+  ok 34 [mobile] › tests\e2e\billing.spec.cjs:37:1 › add shipment, warn for missing rates, and open history safely (389ms)
+  ok 35 [mobile] › tests\e2e\billing.spec.cjs:52:1 › PDF review escapes untrusted fields and supports deleting a review row (695ms)
+  ok 36 [mobile] › tests\e2e\persistence.spec.cjs:32:3 › backend rejection preserves draft and prevents final printing (315ms)
+  ok 37 [mobile] › tests\e2e\persistence.spec.cjs:32:3 › disconnected database preserves draft and prevents final printing (322ms)
+  ok 38 [mobile] › tests\e2e\persistence.spec.cjs:32:3 › HTTP 200 success:false preserves draft and prevents final printing (308ms)
+  ok 39 [mobile] › tests\e2e\persistence.spec.cjs:32:3 › missing CSRF token preserves draft and prevents final printing (304ms)
+  ok 40 [mobile] › tests\e2e\persistence.spec.cjs:41:1 › duplicate save clicks share one request and printing waits for confirmation (263ms)
+  ok 41 [mobile] › tests\e2e\persistence.spec.cjs:55:1 › timeout is explicit and retains a stable retry request (300ms)
+  ok 42 [mobile] › tests\e2e\persistence.spec.cjs:70:1 › offline retry survives refresh and never changes the original request ID (475ms)
+  ok 43 [mobile] › tests\e2e\persistence.spec.cjs:87:1 › refresh preserves unsaved edits and New Bill archives the old work (520ms)
+  ok 44 [mobile] › tests\e2e\persistence.spec.cjs:106:1 › session expiry during save clears private DOM and keeps the retry draft (286ms)
+  ok 45 [mobile] › tests\e2e\persistence.spec.cjs:117:1 › logout removes draft and open review data from DOM, not just navigation (658ms)
+  ok 46 [mobile] › tests\e2e\persistence.spec.cjs:130:1 › incomplete invoice validation blocks requests and final printing (293ms)
+  ok 47 [mobile] › tests\e2e\persistence.spec.cjs:139:1 › unauthenticated initial page never loads private browser draft into state or DOM (168ms)
+  ok 48 [mobile] › tests\e2e\persistence.spec.cjs:147:1 › a definitive rejection permits corrected data with a fresh request ID (397ms)
+  ok 49 [mobile] › tests\e2e\persistence.spec.cjs:162:1 › corrupt local draft is retained and offered for recovery after authentication (148ms)
+  ok 50 [mobile] › tests\e2e\persistence.spec.cjs:169:1 › a cross-tab draft change archives this tab instead of silently overwriting the other draft (243ms)
+  ok 51 [mobile] › tests\e2e\persistence.spec.cjs:176:1 › New Bill refuses to clear work when its recovery archive cannot be stored (275ms)
+  ok 52 [mobile] › tests\e2e\persistence.spec.cjs:191:1 › a print-dialog error does not misreport a confirmed save as failed (291ms)
+  ok 53 [mobile] › tests\e2e\persistence.spec.cjs:199:1 › historical final printing uses recorded amounts rather than recalculating them (524ms)
+  ok 54 [mobile] › tests\e2e\persistence.spec.cjs:215:1 › legacy history can start an empty linked correction without fabricating missing shipments (409ms)
+
+  54 passed (30.5s)

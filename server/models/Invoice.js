@@ -3,6 +3,16 @@ const { shipmentSchema } = require('./Shipment');
 
 const invoiceSchema = new mongoose.Schema(
   {
+    schemaVersion: Number,
+    revision: { type: Number, min: 1 },
+    totalsVerified: { type: Boolean, default: false },
+    reconstructionComplete: { type: Boolean, default: false },
+    calculationContract: String,
+    snapshot: mongoose.Schema.Types.Mixed,
+    correctionOf: { type: String, default: '' },
+    correctionReason: { type: String, default: '' },
+    finalizedAt: Date,
+    operations: [{ _id: false, requestId: String, hash: String, version: Number, action: String, status: String, reason: String, at: Date }],
     invoiceNumber: {
       type: String,
       required: [true, 'Invoice number is required'],
@@ -79,8 +89,11 @@ const invoiceSchema = new mongoose.Schema(
     }
   },
   {
-    timestamps: true
+    timestamps: true,
+    bufferCommands: false
   }
 );
 
+invoiceSchema.index({ shipperCode: 1, invoiceDate: -1 });
+invoiceSchema.index({ 'operations.requestId': 1 }, { unique: true, partialFilterExpression: { 'operations.requestId': { $type: 'string' } } });
 module.exports = mongoose.model('Invoice', invoiceSchema);

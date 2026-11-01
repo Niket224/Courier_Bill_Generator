@@ -1,5 +1,10 @@
 # Production hardening plan for one operator
 
+Phase 2 invoice persistence is implemented: see [its guide](invoice-persistence.md)
+and [verification report](phase2-report.md). Versioned saves, idempotent retries,
+immutable final history, snapshots and print confirmation are complete. The
+authoritative billing calculation refactor remains intentionally deferred.
+
 Phase 1 security and single-operator authentication are implemented; see
 [the security guide](security-and-authentication.md). Access control, strict CORS,
 CSRF, MongoDB-backed sessions, upload/security dependency updates and cache

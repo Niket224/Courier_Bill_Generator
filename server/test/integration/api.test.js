@@ -17,6 +17,7 @@ const api = {
   post: (url) => agent.post(url).set('X-CSRF-Token', csrfToken)
 };
 let mongo;
+let testUri;
 before(async (context) => {
   const dbName = `courier_test_${randomUUID().replaceAll('-', '')}`;
   mongo = await MongoMemoryServer.create({ binary: { version: '7.0.24' }, instance: { ip: '127.0.0.1', dbName } });
@@ -25,6 +26,7 @@ before(async (context) => {
     throw new Error('Test database setup timed out.');
   }
   const uri = mongo.getUri(dbName);
+  testUri = uri;
   assertOwnedUri(uri, dbName);
   await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
   await Promise.all([Rate.init(), Invoice.init()]);
@@ -67,8 +69,8 @@ test('rate upsert, fallback priority, minimum weight and rounding', async () => 
   assert.equal((await api.get('/api/rates?shipperCode=test').expect(200)).body.count, 4);
   await api.post('/api/rates/calculate').send({ shipperCode: 'MISSING', destination: 'patna', weight: 1 }).expect(404);
 });
-test('invoice computation, upsert, pagination, search and retrieval', async () => {
-  const payload = { invoiceNumber: ' test-100 ', shipperCode: ' test ', clientName: 'Synthetic Customer',
+test('invoice computation, controlled lifecycle, pagination, search and retrieval', async () => {
+  const payload = { requestId: randomUUID(), expectedVersion: 0, status: 'GENERATED', invoiceNumber: ' test-100 ', shipperCode: ' test ', clientName: 'Synthetic Customer',
     invoiceDate: '2026-01-02', shipments: [{ cno: 'TEST-AWB', date: '2026-01-02', weight: 2, amount: 100 }] };
   const saved = await api.post('/api/invoices/save').send(payload).expect(201);
   assert.equal(saved.body.data.invoiceNumber, 'TEST-100');
@@ -76,7 +78,7 @@ test('invoice computation, upsert, pagination, search and retrieval', async () =
   assert.equal(saved.body.data.taxAmount, 18);
   assert.equal(saved.body.data.totalAmount, 118);
   assert.equal(saved.body.data.shipments[0].awb, 'TEST-AWB');
-  await api.post('/api/invoices/save').send({ ...payload, status: 'PAID' }).expect(201);
+  await api.post(`/api/invoices/${saved.body.data._id}/status`).send({ requestId: randomUUID(), expectedVersion: 1, status: 'PAID', reason: 'Synthetic payment reference' }).expect(200);
   assert.equal(await Invoice.countDocuments(), 1);
   const list = await api.get('/api/invoices?shipperCode=test&status=paid&limit=1').expect(200);
   assert.equal(list.body.pagination.total, 1);
@@ -290,4 +292,143 @@ test('session store failures fail closed with a generic API error', async (conte
   context.mock.method(store, 'get', (id, callback) => callback(new Error('synthetic-private-db-credential')));
   const result = await request(app).get('/api/invoices').set('Cookie', cookie).expect(500);
   assert.equal(result.body.error, 'Unable to complete request. Please try again.');
+});
+
+function invoiceInput(patch = {}) {
+  return { requestId: randomUUID(), expectedVersion: 0, invoiceNumber: `TEST-${randomUUID()}`, shipperCode: 'TEST',
+    invoiceDate: '2026-01-02', clientName: 'Synthetic Customer', status: 'DRAFT',
+    shipments: [{ awb: 'TEST-AWB', bookingDate: '2026-01-02', destination: 'PATNA', weight: 2, amount: 100 }], ...patch };
+}
+test('identical concurrent saves are idempotent and create exactly one invoice', async () => {
+  const input = invoiceInput();
+  const responses = await Promise.all([api.post('/api/invoices/save').send(input), api.post('/api/invoices/save').send(input)]);
+  assert.deepEqual(responses.map((r) => r.status).sort(), [200, 201]);
+  assert.equal(responses[0].body.data._id, responses[1].body.data._id);
+  assert.equal(await Invoice.countDocuments({ invoiceNumber: input.invoiceNumber }), 1);
+  assert.equal(responses[1].body.data.operations.length, 1);
+});
+test('duplicate invoice numbers and changed idempotency payloads are rejected', async () => {
+  const input = invoiceInput();
+  const created = await api.post('/api/invoices/save').send(input).expect(201);
+  await api.post('/api/invoices/save').send({ ...input, requestId: randomUUID() }).expect(409);
+  const changed = await api.post('/api/invoices/save').send({ ...input, notes: 'different' }).expect(409);
+  assert.equal(changed.body.code, 'IDEMPOTENCY_CONFLICT');
+  await api.post('/api/invoices/save').send({ ...input, invoiceNumber: 'CHANGED-NUMBER-SAME-REQUEST' }).expect(409);
+  assert.equal(await Invoice.countDocuments({ invoiceNumber: 'CHANGED-NUMBER-SAME-REQUEST' }), 0);
+  const original = await Invoice.findById(created.body.data._id).lean();
+  assert.equal(original.revision, 1); assert.equal(original.notes, '');
+});
+test('draft updates use revisions and conflicting concurrent edits never partially combine', async () => {
+  const input = invoiceInput();
+  await api.post('/api/invoices/save').send(input).expect(201);
+  const updated = await api.post('/api/invoices/save').send({ ...input, expectedVersion: 1, requestId: randomUUID(), notes: 'revision two' }).expect(200);
+  assert.equal(updated.body.data.revision, 2);
+  const responses = await Promise.all(['first', 'second'].map((notes) => api.post('/api/invoices/save').send({ ...input, expectedVersion: 2, requestId: randomUUID(), notes })));
+  assert.deepEqual(responses.map((r) => r.status).sort(), [200, 409]);
+  const stored = await Invoice.findOne({ invoiceNumber: input.invoiceNumber }).lean();
+  assert.equal(stored.revision, 3); assert.equal(stored.operations.length, 3);
+  assert.ok(['first', 'second'].includes(stored.notes));
+});
+test('finalized and paid contents are immutable; paid and cancellation actions retain original amounts', async () => {
+  const input = invoiceInput();
+  const created = await api.post('/api/invoices/save').send(input).expect(201);
+  const final = { ...input, requestId: randomUUID(), expectedVersion: 1, status: 'GENERATED' };
+  await api.post('/api/invoices/save').send(final).expect(200);
+  await api.post('/api/invoices/save').send({ ...final, requestId: randomUUID(), expectedVersion: 2, notes: 'overwrite attempt' }).expect(409);
+  const paid = { requestId: randomUUID(), expectedVersion: 2, status: 'PAID', reason: 'Synthetic payment' };
+  await api.post(`/api/invoices/${created.body.data._id}/status`).send(paid).expect(200);
+  await api.post(`/api/invoices/${created.body.data._id}/status`).send(paid).expect(200);
+  await api.post('/api/invoices/save').send({ ...final, requestId: randomUUID(), expectedVersion: 3, totalAmount: 1 }).expect(409);
+  const cancel = { requestId: randomUUID(), expectedVersion: 3, status: 'CANCELLED', reason: 'Documented correction required' };
+  const cancelled = await api.post(`/api/invoices/${created.body.data._id}/status`).send(cancel).expect(200);
+  assert.equal(cancelled.body.data.totalAmount, 118); assert.equal(cancelled.body.data.shipments[0].amount, 100);
+  assert.equal(cancelled.body.data.operations.at(-1).reason, cancel.reason);
+  await api.post(`/api/invoices/${created.body.data._id}/status`).send({ requestId: randomUUID(), expectedVersion: 4, status: 'PAID', reason: 'reopen' }).expect(409);
+});
+test('corrections link new numbers without mutating original finalized data', async () => {
+  const original = invoiceInput({ status: 'GENERATED' });
+  const created = await api.post('/api/invoices/save').send(original).expect(201);
+  const before = await Invoice.findById(created.body.data._id).lean();
+  const correction = invoiceInput({ correctionOf: original.invoiceNumber, correctionReason: 'Synthetic address correction' });
+  const saved = await api.post('/api/invoices/save').send(correction).expect(201);
+  assert.equal(saved.body.data.correctionOf, original.invoiceNumber.toUpperCase());
+  assert.deepEqual(await Invoice.findById(before._id).lean(), before);
+});
+test('legacy historical documents remain readable and cannot be silently adopted or overwritten', async () => {
+  const legacy = { invoiceNumber: 'LEGACY-PRESERVED', shipperCode: 'TEST', invoiceDate: new Date('2020-01-02'), status: 'GENERATED', totalAmount: 987.65,
+    shipments: [{ awb: 'LEGACY-TEST', amount: 987.65 }], legacyExtra: { retained: true } };
+  const inserted = await Invoice.collection.insertOne(legacy);
+  const before = await Invoice.collection.findOne({ _id: inserted.insertedId });
+  await api.get('/api/invoices/LEGACY-PRESERVED').expect(200);
+  const rejected = await api.post('/api/invoices/save').send(invoiceInput({ invoiceNumber: legacy.invoiceNumber })).expect(409);
+  assert.equal(rejected.body.code, 'LEGACY_READ_ONLY');
+  assert.deepEqual(await Invoice.collection.findOne({ _id: inserted.insertedId }), before);
+});
+test('invalid fields and failed updates leave invoice data unchanged', async (context) => {
+  const input = invoiceInput();
+  const created = await api.post('/api/invoices/save').send(input).expect(201);
+  const before = await Invoice.findById(created.body.data._id).lean();
+  for (const patch of [{ invoiceDate: '2026-02-30' }, { totalAmount: null }, { totalAmount: '-1' }, { shipments: [{}] }, { status: 'PAID' }]) {
+    await api.post('/api/invoices/save').send({ ...input, expectedVersion: 1, requestId: randomUUID(), ...patch }).expect(400);
+  }
+  await api.post('/api/invoices/save').send({ ...input, expectedVersion: 1, requestId: randomUUID(), client: '000000000000000000000001' }).expect(400);
+  context.mock.method(Invoice, 'findOneAndUpdate', () => { throw new Error('synthetic failure'); });
+  await api.post('/api/invoices/save').send({ ...input, expectedVersion: 1, requestId: randomUUID(), notes: 'must not appear' }).expect(500);
+  assert.deepEqual(await Invoice.findById(before._id).lean(), before);
+});
+test('complete metadata and shipment snapshot survives persistence without repricing', async () => {
+  const adapter = require('../../../mobile-bill-app/persistence');
+  const fixture = structuredClone(require('../../../tests/fixtures/bill.json'));
+  fixture.bill.invoiceNo = 'SNAPSHOT-TEST';
+  const payload = adapter.payload(fixture, 'GENERATED', () => ({ status: 'ok', amount: 45 }), () => ({ gross: 45, fuel: 9, subtotal: 54, cgst: 4.86, sgst: 4.86, final: 63.72 }));
+  const saved = await api.post('/api/invoices/save').send({ ...payload, requestId: randomUUID(), expectedVersion: 0 }).expect(201);
+  assert.equal(saved.body.data.totalsVerified, false); assert.equal(saved.body.data.calculationContract, 'browser-v1-unverified');
+  assert.equal(saved.body.data.reconstructionComplete, true);
+  assert.deepEqual(saved.body.data.snapshot, payload.snapshot);
+  assert.equal(saved.body.data.shipments[0].pcs, 1); assert.equal(saved.body.data.shipments[0].rateSnapshot.baseRate, 45);
+});
+test('new lifecycle endpoints retain authentication and CSRF protections', async () => {
+  const path = '/api/invoices/000000000000000000000001/status';
+  await request(app).post(path).send({}).expect(401);
+  await agent.post(path).send({}).expect(403);
+  await api.post(path).send({}).expect(400);
+});
+test('history lists stay lightweight while detail preserves reconstruction data', async () => {
+  const list = await api.get('/api/invoices?limit=100').expect(200);
+  const snapshot = list.body.data.find((item) => item.invoiceNumber === 'SNAPSHOT-TEST');
+  assert.equal(snapshot.snapshot, undefined); assert.equal(snapshot.operations, undefined);
+  const detail = await api.get(`/api/invoices/${snapshot._id}`).expect(200);
+  assert.equal(detail.body.data.snapshot.totals.final, 63.72);
+  assert.equal(detail.body.data.operations.length, 1);
+});
+test('invoice search rejects malformed filters and treats search input literally', async () => {
+  for (const query of ['startDate=bad', 'endDate=2026-02-30', 'startDate=2026-02-01&endDate=2026-01-01', 'page=-1', 'limit=NaN', 'status=WRONG', 'unknown=value']) {
+    await api.get(`/api/invoices/search?${query}`).expect(400);
+  }
+  const input = invoiceInput({ clientName: 'Synthetic [literal' });
+  await api.post('/api/invoices/save').send(input).expect(201);
+  const result = await api.get('/api/invoices/search?q=%5Bliteral').expect(200);
+  assert.equal(result.body.count, 1);
+});
+test('concurrent lifecycle retries append only one audit operation', async () => {
+  const created = await api.post('/api/invoices/save').send(invoiceInput({ status: 'GENERATED' })).expect(201);
+  const body = { requestId: randomUUID(), expectedVersion: 1, status: 'PAID', reason: 'Synthetic payment' };
+  const results = await Promise.all([api.post(`/api/invoices/${created.body.data._id}/status`).send(body), api.post(`/api/invoices/${created.body.data._id}/status`).send(body)]);
+  assert.deepEqual(results.map((r) => r.status), [200, 200]);
+  assert.equal((await Invoice.findById(created.body.data._id)).operations.length, 2);
+  const other = await api.post('/api/invoices/save').send(invoiceInput({ status: 'GENERATED' })).expect(201);
+  await api.post(`/api/invoices/${other.body.data._id}/status`).send(body).expect(409);
+  assert.equal((await Invoice.findById(other.body.data._id)).status, 'GENERATED');
+});
+test('disconnected isolated database fails safely without buffering a write', async () => {
+  const memory = new (require('../../node_modules/express-session').MemoryStore)();
+  const isolated = createApp(config, { sessionStore: memory });
+  const { client, token } = await signIn(isolated);
+  const input = invoiceInput();
+  await mongoose.disconnect();
+  try {
+    const result = await client.post('/api/invoices/save').set('X-CSRF-Token', token).send(input).expect(503);
+    assert.equal(result.body.code, 'DATABASE_UNAVAILABLE');
+  } finally { await mongoose.connect(testUri, { serverSelectionTimeoutMS: 5000 }); }
+  assert.equal(await Invoice.countDocuments({ invoiceNumber: input.invoiceNumber }), 0);
 });

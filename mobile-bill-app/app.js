@@ -37,7 +37,14 @@ const defaultState = {
   ],
 };
 
-let state = loadState();
+// Do not load private drafts until the server confirms the operator's session.
+let state = null;
+let workspaceEpoch = 0;
+let invoiceSaving = false;
+let historicalRecord = null;
+let localDraftConflict = false;
+const workspaceTemplate = document.querySelector('.app-shell')?.innerHTML;
+const reviewTemplate = document.getElementById('pdfReviewModal')?.innerHTML;
 let deferredInstallPrompt = null;
 
 const billFields = [
@@ -76,6 +83,7 @@ function mergeImportedState(imported) {
 }
 
 function loadState() {
+  if (!window.CourierAuth.isAuthenticated()) throw new Error('Sign in to open private drafts.');
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) {
     const fresh = structuredClone(defaultState);
@@ -83,20 +91,29 @@ function loadState() {
     return fresh;
   }
   try {
-    const loaded = mergeImportedState(JSON.parse(raw));
+    const parsed = JSON.parse(raw);
+    if (!parsed?.bill || typeof parsed.bill !== 'object' || !Array.isArray(parsed.rates) || !Array.isArray(parsed.shipments)) throw new Error('Invalid stored draft');
+    const loaded = mergeImportedState(parsed);
     if (loaded.bill.logoSrc === "" || loaded.bill.logoSrc === undefined) {
       loaded.bill.logoSrc = "assets/logo.png";
     }
     return loaded;
   } catch {
-    const fresh = structuredClone(defaultState);
-    fresh.bill.logoSrc = "assets/logo.png";
-    return fresh;
+    throw new Error('The stored draft cannot be read. It has not been changed. Download it for recovery.');
   }
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+function saveState(markDirty = true) {
+  if (!state) return false;
+  if (localDraftConflict) { setInvoiceSaveState('Failed to save', 'Another tab changed the draft. This tab was archived; reload before continuing.'); return false; }
+  if (markDirty) {
+    historicalRecord = null;
+    state.persistence ||= {};
+    state.persistence.dirty = true;
+    setInvoiceSaveState('Unsaved', 'Changes are stored on this device until a save is confirmed.');
+  }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); return true; }
+  catch { setInvoiceSaveState('Failed to save', 'Device storage is full. Keep this tab open and download a backup before continuing.'); return false; }
 }
 
 function money(value) {
@@ -408,7 +425,7 @@ function renderShipments() {
 }
 
 function renderSummary() {
-  const total = totals();
+  const total = historicalRecord?.snapshot?.totals || totals();
   document.getElementById("summaryGross").textContent = money(total.gross);
   document.getElementById("summarySubtotal").textContent = money(total.subtotal);
   document.getElementById("summaryFinal").textContent = money(total.final);
@@ -423,12 +440,12 @@ function renderSummary() {
   }
 }
 
-function renderInvoice() {
-  const total = totals();
+function renderInvoice(record = historicalRecord) {
+  const total = record?.snapshot?.totals || totals();
   const rows = state.shipments
     .filter((shipment) => shipment.cno || shipment.destination)
     .map((shipment, index) => {
-      const result = calculateShipment(shipment);
+      const result = record?.shipments?.[index] ? { amount: record.shipments[index].amount, status: 'ok' } : calculateShipment(shipment);
       return `
         <tr>
           <td>${index + 1}</td>
@@ -671,14 +688,23 @@ function focusLastRateField(field) {
 }
 
 function newBill() {
+  if (!state || invoiceSaving) return;
   if (!confirm("Shipments clear hongi. Invoice no. aur period agle mahine par shift honge. Rates safe rahenge. Continue?")) return;
+  if (!archiveCurrentDraft()) return;
+  const previous = structuredClone(state);
   const nextPeriod = nextPeriodDates(state.bill.periodEnd);
   state.bill.invoiceNo = nextInvoiceNo(state.bill.invoiceNo);
   state.bill.periodStart = nextPeriod.periodStart;
   state.bill.periodEnd = nextPeriod.periodEnd;
   state.bill.invoiceDate = nextPeriod.invoiceDate;
   state.shipments = [];
-  saveState();
+  delete state.persistence;
+  delete state.correctionOf;
+  delete state.correctionReason;
+  delete state.invoiceMetadata;
+  if (!saveState()) { state = previous; return; }
+  document.getElementById('invoiceDueDate').value = '';
+  document.getElementById('invoiceNotes').value = '';
   billFields.forEach((field) => {
     const input = document.getElementById(field);
     if (input) input.value = state.bill[field] ?? "";
@@ -826,19 +852,8 @@ function handleDelete(event) {
   renderAll();
 }
 
-function printInvoice() {
-  const missing = countMissingRates();
-  if (missing > 0) {
-    alert(`${missing} shipment(s) ka rate missing hai. Pehle Rates tab mein fix karo, phir print karo.`);
-    switchScreen("rates");
-    return;
-  }
-  if (!state.shipments.some((shipment) => shipment.cno || shipment.destination)) {
-    alert("Print karne ke liye kam se kam ek shipment add karo.");
-    switchScreen("entry");
-    return;
-  }
-  window.print();
+async function printInvoice() {
+  return persistInvoiceToBackend('GENERATED', true);
 }
 
 function switchScreen(target) {
@@ -864,10 +879,12 @@ function exportData() {
 function importData(file) {
   const reader = new FileReader();
   reader.onload = () => {
+    if (!state || !window.CourierAuth.isAuthenticated()) return;
     try {
       const imported = JSON.parse(String(reader.result));
-      if (!imported || typeof imported !== "object") throw new Error("invalid");
+      if (!imported?.bill || typeof imported.bill !== 'object' || !Array.isArray(imported.rates) || !Array.isArray(imported.shipments)) throw new Error("invalid");
       if (!confirm("Current data backup file se replace ho jayegi. Continue?")) return;
+      if (!archiveCurrentDraft()) return;
       state = mergeImportedState(imported);
       saveState();
       init(false);
@@ -951,6 +968,7 @@ function bindQuickAdd() {
 }
 
 function init(bind = true) {
+  if (!state || !window.CourierAuth.isAuthenticated()) return;
   renderShipperOptions();
   billFields.forEach((field) => {
     const input = document.getElementById(field);
@@ -961,6 +979,10 @@ function init(bind = true) {
   renderShipments();
   renderAll();
   updateImageUploadsUI();
+  renderDraftArchives();
+  document.getElementById('invoiceDueDate').value = state.invoiceMetadata?.dueDate || '';
+  document.getElementById('invoiceNotes').value = state.invoiceMetadata?.notes || '';
+  setInvoiceSaveState('Unsaved', state.persistence?.pending ? 'An earlier save has an unknown outcome. Retry it to confirm persistence.' : 'Save a draft or finalize before printing.');
 
   if (!bind) return;
   bindBillForm();
@@ -974,8 +996,9 @@ function init(bind = true) {
   const removeSignatureBtn = document.getElementById("removeSignature");
 
   const handleImageUpload = (file, callback) => {
+    const epoch = workspaceEpoch;
     const reader = new FileReader();
-    reader.onload = (e) => callback(e.target.result);
+    reader.onload = (e) => { if (state && epoch === workspaceEpoch && window.CourierAuth.isAuthenticated()) callback(e.target.result); };
     reader.readAsDataURL(file);
   };
 
@@ -1023,6 +1046,14 @@ function init(bind = true) {
   document.getElementById("addShipmentButton").addEventListener("click", addShipment);
   document.getElementById("newBillButton").addEventListener("click", newBill);
   document.getElementById("printButton").addEventListener("click", printInvoice);
+  document.getElementById('saveDraftButton').addEventListener('click', () => persistInvoiceToBackend('DRAFT'));
+  document.getElementById('retrySaveButton').addEventListener('click', () => persistInvoiceToBackend(state?.persistence?.pending?.payload.status || 'DRAFT'));
+  document.getElementById('restoreArchiveButton').addEventListener('click', restoreLocalArchive);
+  for (const [id, key] of [['invoiceDueDate', 'dueDate'], ['invoiceNotes', 'notes']]) {
+    document.getElementById(id).addEventListener('input', (event) => {
+      state.invoiceMetadata ||= {}; state.invoiceMetadata[key] = event.target.value; saveState();
+    });
+  }
   document.getElementById("exportButton").addEventListener("click", () => {
     exportData();
     showToast("Backup download ho gaya.");
@@ -1037,6 +1068,8 @@ function init(bind = true) {
   });
   setupInstallPrompt();
   registerServiceWorker();
+  setupAiPdfParser();
+  setupHistoryTab();
 
   if (!state.shipments.length) {
     document.getElementById("quickCno")?.focus();
@@ -1152,6 +1185,7 @@ function setupAiPdfParser() {
 }
 
 function openReviewModal(data) {
+  if (!state || !window.CourierAuth.isAuthenticated()) return;
   const modal = document.getElementById("pdfReviewModal");
   if (!modal) return;
 
@@ -1259,6 +1293,7 @@ async function saveReviewedRates() {
     } catch (err) {
       console.warn("Backend rate save error (using local storage fallback):", err);
     }
+    if (!state || !window.CourierAuth.isAuthenticated()) return;
 
     const existingIdx = state.rates.findIndex(
       (ex) => normalize(ex.client) === normalize(r.shipperCode) && normalize(ex.destination) === normalize(r.targetName)
@@ -1291,6 +1326,7 @@ async function saveReviewedRates() {
 }
 
 function setupHistoryTab() {
+  document.getElementById('historyInvoiceList')?.addEventListener('click', handleHistoryAction);
   document.getElementById("executeSearchButton")?.addEventListener("click", fetchPastInvoices);
   document.getElementById("refreshInvoicesButton")?.addEventListener("click", fetchPastInvoices);
   document.getElementById("clearSearchButton")?.addEventListener("click", () => {
@@ -1339,6 +1375,13 @@ async function fetchPastInvoices() {
         <div class="history-card-amount">
           <div class="history-amount-text">${money(inv.totalAmount)}</div>
           <span class="badge-status ${escapeHtml((inv.status || "generated").toLowerCase())}">${escapeHtml(inv.status || "GENERATED")}</span>
+          <div class="history-actions" data-invoice-id="${escapeHtml(inv._id)}">
+            <button type="button" data-history="open">Open</button>
+            <button type="button" data-history="download">Download record</button>
+            <button type="button" data-history="correct">Create correction</button>
+            ${inv.schemaVersion === 2 && inv.status === 'GENERATED' ? '<button type="button" data-history="PAID">Mark paid</button>' : ''}
+            ${inv.schemaVersion === 2 && inv.status !== 'CANCELLED' ? '<button type="button" data-history="CANCELLED">Cancel</button>' : ''}
+          </div>
         </div>
       </div>
     `).join("");
@@ -1348,58 +1391,280 @@ async function fetchPastInvoices() {
   }
 }
 
-async function persistInvoiceToBackend() {
-  try {
-    const validShipments = state.shipments
-      .filter((s) => s.cno && String(s.cno).trim().length > 0)
-      .map((s) => ({
-        awb: String(s.cno).trim(),
-        bookingDate: s.date,
-        destination: s.destination,
-        actualWeight: s.weight,
-        chargedWeight: s.weight,
-        amount: calculateShipment(s).amount
-      }));
-
-    const payload = {
-      invoiceNumber: state.bill.invoiceNo,
-      shipperCode: state.bill.shipperCode,
-      clientName: state.bill.billTo,
-      clientGst: state.bill.gstNo,
-      invoiceDate: state.bill.invoiceDate,
-      shipments: validShipments,
-      subtotal: totals().subtotal,
-      taxRate: asNumber(state.bill.cgstPct) + asNumber(state.bill.sgstPct),
-      taxAmount: totals().cgst + totals().sgst,
-      totalAmount: totals().final,
-      status: "GENERATED"
-    };
-
-    await window.CourierAuth.apiFetch(`${API_BASE}/invoices/save`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-  } catch (err) {
-    console.warn("Could not persist invoice to server (offline):", err);
+function setInvoiceSaveState(label, message) {
+  const badge = document.getElementById('invoiceSaveState');
+  if (badge) badge.textContent = label;
+  const detail = document.getElementById('invoiceSaveMessage');
+  if (detail) detail.textContent = message;
+  const retry = document.getElementById('retrySaveButton');
+  if (retry) retry.hidden = !state?.persistence?.pending || invoiceSaving;
+}
+function invoicePayload(status) { return window.InvoicePersistence.payload(state, status, calculateShipment, totals); }
+async function invoiceHash(payload) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(window.InvoicePersistence.content(payload)));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+function setInvoiceBusy(busy) {
+  invoiceSaving = busy;
+  const main = document.querySelector('.app-shell main');
+  if (main) main.inert = busy;
+  const nav = document.querySelector('.bottom-nav');
+  if (nav) nav.inert = busy;
+  for (const id of ['printButton', 'saveDraftButton', 'retrySaveButton', 'newBillButton']) {
+    const button = document.getElementById(id);
+    if (button) button.disabled = busy;
   }
 }
-
-// Hook into initial setup & screen switches
-setupAiPdfParser();
-setupHistoryTab();
-
+function finalPrint(record) {
+  if (!state || !window.CourierAuth.isAuthenticated()) return;
+  renderInvoice(record);
+  document.body.classList.add('final-print');
+  try { window.print(); }
+  catch { showToast('Invoice is saved, but the print dialog could not open. Use Print to try again.'); }
+  finally { document.body.classList.remove('final-print'); }
+}
+async function persistInvoiceToBackend(status = 'DRAFT', printAfter = false) {
+  if (invoiceSaving || !state || !window.CourierAuth.isAuthenticated()) return false;
+  if (localDraftConflict) { setInvoiceSaveState('Failed to save', 'Another tab changed the draft. Reload or restore its archive before saving.'); return false; }
+  const current = state;
+  const epoch = workspaceEpoch;
+  let timeout;
+  setInvoiceBusy(true);
+  try {
+    let payload;
+    let invalidCurrent = false;
+    try { payload = invoicePayload(status); } catch (error) {
+      if (!current.persistence?.pending) throw error;
+      payload = current.persistence.pending.payload; invalidCurrent = true;
+    }
+    const contentHash = invalidCurrent ? null : await invoiceHash(payload);
+    if (epoch !== workspaceEpoch || state !== current || !window.CourierAuth.isAuthenticated()) return false;
+    const meta = current.persistence ||= {};
+    const controller = new AbortController();
+    timeout = setTimeout(() => controller.abort(), 15000);
+    if (!meta.pending && meta.confirmed?.invoiceNumber === payload.invoiceNumber && ['GENERATED', 'PAID'].includes(meta.confirmed.status)) {
+      if (meta.confirmed.contentHash !== contentHash) throw new Error('This invoice is finalized. Use New Bill or create a correction; its history will not be overwritten.');
+      setInvoiceSaveState('Saving', 'Confirming the saved invoice before final printing…');
+      const response = await window.CourierAuth.apiFetch(`${API_BASE}/invoices/${meta.confirmed.id}`, { signal: controller.signal });
+      const result = await response.json();
+      if (!result.success || result.data.revision !== meta.confirmed.revision || !['GENERATED', 'PAID'].includes(result.data.status)) throw new Error('Saved invoice changed or was cancelled. Reload it from History.');
+      if (state !== current || epoch !== workspaceEpoch) return false;
+      setInvoiceSaveState('Saved', 'Finalized invoice confirmed. Totals are recorded, not independently verified.');
+      if (printAfter) finalPrint(result.data);
+      return true;
+    }
+    if (!meta.pending) {
+      const revision = meta.confirmed?.invoiceNumber === payload.invoiceNumber ? meta.confirmed.revision : 0;
+      meta.pending = { payload: { ...payload, requestId: crypto.randomUUID(), expectedVersion: revision }, contentHash };
+      if (!saveState(false)) { delete meta.pending; throw new Error('Cannot safely retain the retry request. Free device storage or download a backup.'); }
+    }
+    const pending = meta.pending;
+    setInvoiceSaveState('Saving', `Confirming ${pending.payload.status.toLowerCase()} invoice persistence…`);
+    const response = await window.CourierAuth.apiFetch(`${API_BASE}/invoices/save`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pending.payload), signal: controller.signal
+    });
+    const result = await response.json().catch(() => { throw new Error('Save response could not be read. Retry the same request to confirm its outcome.'); });
+    if (!response.ok || result.success !== true || typeof result.data?._id !== 'string' || !/^[a-f0-9]{24}$/i.test(result.data._id) || result.data.invoiceNumber !== pending.payload.invoiceNumber ||
+        result.operationVersion !== pending.payload.expectedVersion + 1 || result.data.revision !== result.operationVersion ||
+        result.data.status !== pending.payload.status || result.data.totalAmount !== pending.payload.totalAmount ||
+        !Array.isArray(result.data.operations) || !result.data.operations.some((op) => op.requestId === pending.payload.requestId)) {
+      throw new Error('The server did not confirm this exact save. Retry or check History; final printing is blocked.');
+    }
+    if (state !== current || epoch !== workspaceEpoch || !window.CourierAuth.isAuthenticated()) return false;
+    meta.confirmed = { id: result.data._id, invoiceNumber: result.data.invoiceNumber, revision: result.data.revision, status: result.data.status, contentHash: pending.contentHash };
+    delete meta.pending;
+    const unchanged = contentHash === pending.contentHash && await invoiceHash(invoicePayload(status)) === pending.contentHash;
+    meta.dirty = !unchanged;
+    if (!saveState(false)) throw new Error('Server saved the invoice, but the device could not retain its receipt. Check History before continuing.');
+    if (!unchanged) {
+      setInvoiceSaveState('Unsaved', 'The earlier snapshot was saved. Current edits are still unsaved; finalized content requires a correction.');
+      return false;
+    }
+    setInvoiceSaveState('Saved', `${result.data.status === 'DRAFT' ? 'Draft saved. Use Print to finalize.' : 'Finalized and saved.'} Totals are recorded, not independently verified.`);
+    if (printAfter && result.data.status === 'GENERATED') finalPrint(result.data);
+    return true;
+  } catch (error) {
+    if (state === current && epoch === workspaceEpoch && [400, 409, 413, 422].includes(error.status)) {
+      delete current.persistence?.pending; // Definite rejection: corrected data gets a fresh request ID.
+      saveState(false);
+    }
+    if (state === current && epoch === workspaceEpoch) setInvoiceSaveState(error.code === 'OFFLINE' || navigator.onLine === false ? 'Offline' : 'Failed to save', error.message);
+    return false;
+  } finally {
+    clearTimeout(timeout);
+    if (epoch === workspaceEpoch) {
+      setInvoiceBusy(false);
+      const retry = document.getElementById('retrySaveButton');
+      if (retry) retry.hidden = !state?.persistence?.pending;
+    }
+  }
+}
+const ARCHIVE_PREFIX = 'courier-bill-archive-';
+function archiveCurrentDraft() {
+  if (!state) return false;
+  try {
+    localStorage.setItem(ARCHIVE_PREFIX + crypto.randomUUID(), JSON.stringify({ createdAt: new Date().toISOString(), state }));
+    renderDraftArchives();
+    return true;
+  } catch { alert('Cannot archive this draft: device storage is full. Download a backup first. Nothing was cleared.'); return false; }
+}
+function renderDraftArchives() {
+  const select = document.getElementById('draftArchiveSelect');
+  if (!select || !state) return;
+  const options = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key.startsWith(ARCHIVE_PREFIX)) continue;
+    try { const entry = JSON.parse(localStorage.getItem(key)); options.push({ key, date: entry.createdAt, number: entry.state.bill.invoiceNo }); } catch { /* Keep unreadable archives untouched. */ }
+  }
+  options.sort((a, b) => b.date.localeCompare(a.date));
+  select.innerHTML = options.map((entry) => `<option value="${escapeHtml(entry.key)}">${escapeHtml(entry.number)} — ${escapeHtml(entry.date)}</option>`).join('');
+}
+function restoreLocalArchive() {
+  if (!state || invoiceSaving) return;
+  const key = document.getElementById('draftArchiveSelect').value;
+  if (!key || !key.startsWith(ARCHIVE_PREFIX)) return;
+  const restored = JSON.parse(localStorage.getItem(key));
+  if (!confirm('Restore this archived draft? The current draft will be archived first.')) return;
+  if (!archiveCurrentDraft()) return;
+  const previous = state;
+  const previousRecord = historicalRecord;
+  state = mergeImportedState(restored.state);
+  historicalRecord = null;
+  if (!saveState(false)) { state = previous; historicalRecord = previousRecord; return; }
+  init(false);
+  switchScreen('invoice');
+}
+function activateWorkspace() {
+  if (state || !window.CourierAuth.isAuthenticated()) return;
+  workspaceEpoch++;
+  localDraftConflict = false;
+  try { state = loadState(); } catch (error) {
+    const shell = document.querySelector('.app-shell');
+    shell.innerHTML = '<p>Stored draft could not be read and was not modified.</p><button id="recoverRawDraft" type="button">Download draft for recovery</button><button id="logoutButton" type="button">Sign out</button>';
+    document.getElementById('recoverRawDraft').addEventListener('click', () => {
+      if (window.CourierAuth.isAuthenticated()) downloadRecord(localStorage.getItem(STORAGE_KEY), 'unreadable-draft.json');
+    });
+    return;
+  }
+  init();
+}
+function clearPrivateWorkspace() {
+  workspaceEpoch++;
+  state = null;
+  historicalRecord = null;
+  invoiceSaving = false;
+  document.body.classList.remove('final-print');
+  const shell = document.querySelector('.app-shell');
+  if (shell) shell.innerHTML = workspaceTemplate;
+  const modal = document.getElementById('pdfReviewModal');
+  if (modal) { modal.innerHTML = reviewTemplate; modal.hidden = true; modal.style.display = 'none'; }
+}
+window.addEventListener('courier:auth', (event) => event.detail ? activateWorkspace() : clearPrivateWorkspace());
+window.addEventListener('afterprint', () => document.body.classList.remove('final-print'));
+window.addEventListener('storage', (event) => {
+  if (event.key !== STORAGE_KEY || !state || !window.CourierAuth.isAuthenticated()) return;
+  if (event.newValue === JSON.stringify(state)) return;
+  const archived = archiveCurrentDraft();
+  localDraftConflict = true;
+  setInvoiceSaveState('Failed to save', archived ? 'Another tab changed the draft. This tab was archived; reload or restore it from Tools.' : 'Another tab changed the draft. Download a backup from this tab before reloading.');
+});
 const originalSwitchScreen = switchScreen;
 switchScreen = function (target) {
+  if (!state || !window.CourierAuth.isAuthenticated()) return;
   originalSwitchScreen(target);
-  if (target === "history") fetchPastInvoices();
+  if (target === 'history') fetchPastInvoices();
 };
+if (window.CourierAuth.isAuthenticated()) activateWorkspace();
 
-const originalPrintInvoice = printInvoice;
-printInvoice = function () {
-  persistInvoiceToBackend();
-  originalPrintInvoice();
-};
-
-init();
+function downloadRecord(data, filename) {
+  const url = URL.createObjectURL(new Blob([typeof data === 'string' ? data : JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  const link = document.createElement('a'); link.href = url; link.download = filename; link.click(); URL.revokeObjectURL(url);
+}
+let historyActionBusy = false;
+async function handleHistoryAction(event) {
+  const button = event.target.closest('button[data-history]');
+  if (!button || !state || historyActionBusy || invoiceSaving) return;
+  const id = button.closest('[data-invoice-id]').dataset.invoiceId;
+  const action = button.dataset.history;
+  const epoch = workspaceEpoch;
+  const previous = state;
+  const previousRecord = historicalRecord;
+  let replacing = false;
+  historyActionBusy = true;
+  setInvoiceBusy(true);
+  button.disabled = true;
+  try {
+    const response = await window.CourierAuth.apiFetch(`${API_BASE}/invoices/${encodeURIComponent(id)}`);
+    const result = await response.json();
+    if (!result.success || !result.data?._id) throw new Error('Saved invoice could not be confirmed.');
+    const invoice = result.data;
+    if (epoch !== workspaceEpoch || !state) return;
+    if (action === 'download') { downloadRecord(invoice, 'invoice-record.json'); return; }
+    if (['PAID', 'CANCELLED'].includes(action)) {
+      const key = `courier-invoice-transition-${id}`;
+      let pending = JSON.parse(localStorage.getItem(key) || 'null');
+      if (pending && pending.status !== action) throw new Error('An earlier status change is unresolved. Retry that action first.');
+      if (!pending) {
+        const reason = prompt(action === 'PAID' ? 'Payment reference / reason:' : 'Cancellation reason (the original invoice will be retained):');
+        if (!reason?.trim()) return;
+        pending = { requestId: crypto.randomUUID(), expectedVersion: invoice.revision, status: action, reason: reason.trim() };
+        localStorage.setItem(key, JSON.stringify(pending));
+      }
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
+      let changed;
+      try { changed = await (await window.CourierAuth.apiFetch(`${API_BASE}/invoices/${id}/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pending), signal: controller.signal })).json(); }
+      finally { clearTimeout(timer); }
+      if (changed.success !== true || !changed.data?.operations?.some((op) => op.requestId === pending.requestId)) throw new Error('Status change not confirmed. Retry the same action.');
+      localStorage.removeItem(key);
+      if (epoch === workspaceEpoch && state) { showToast('Status change confirmed.'); await fetchPastInvoices(); }
+      return;
+    }
+    if (!invoice.snapshot) {
+      if (action !== 'correct') { downloadRecord(invoice, 'historical-invoice-record.json'); alert('This older record has no complete layout snapshot. The original record was downloaded; it was not changed.'); return; }
+      const number = prompt('New invoice number for this correction (must be unique):');
+      const reason = prompt('Reason for correction:');
+      if (!number?.trim() || !reason?.trim() || !confirm('This older record lacks complete billing metadata. Create an empty linked draft and enter its missing details manually?')) return;
+      if (!archiveCurrentDraft()) return;
+      replacing = true;
+      state = { ...state, bill: { ...state.bill, invoiceNo: number.trim(), shipperCode: invoice.shipperCode, billTo: invoice.clientName || '', gstNo: invoice.clientGst || '' },
+        shipments: [], correctionOf: invoice.invoiceNumber, correctionReason: reason.trim(), invoiceMetadata: { client: null, notes: invoice.notes || '' } };
+      delete state.persistence;
+      if (!saveState()) throw new Error('Could not store the correction draft locally. The current draft is preserved.');
+      replacing = false;
+      init(false); switchScreen('invoice'); showToast('Linked correction draft created. Complete and verify its details before finalizing.'); return;
+    }
+    if (!confirm('Open this invoice? Your current local draft will be archived first.')) return;
+    let correctedNumber, reason;
+    if (action === 'correct') {
+      correctedNumber = prompt('New invoice number for this correction (must be unique):');
+      reason = prompt('Reason for correction:');
+      if (!correctedNumber?.trim() || !reason?.trim()) return;
+    }
+    if (!archiveCurrentDraft()) return;
+    replacing = true;
+    state = { bill: structuredClone(invoice.snapshot.bill), rates: structuredClone(invoice.snapshot.rates), shipments: invoice.shipments.map((s) => ({
+      id: s.sourceId || crypto.randomUUID(), cno: s.awb, date: s.bookingDate.slice(0, 10), destination: s.destination, origin: s.origin,
+      receiverName: s.receiverName, type: s.type || 'D', pcs: s.pcs ?? 1, weight: s.actualWeight, chargedWeight: s.chargedWeight, rate: s.rate, manualAmount: s.manualAmount ?? ''
+    })), invoiceMetadata: { client: invoice.client, notes: invoice.notes, dueDate: invoice.dueDate?.slice(0, 10) }, correctionOf: invoice.correctionOf || '', correctionReason: invoice.correctionReason || '' };
+    if (action === 'correct') {
+      state.bill.invoiceNo = correctedNumber.trim(); state.correctionOf = invoice.invoiceNumber; state.correctionReason = reason.trim();
+    } else {
+      state.persistence = { confirmed: { id: invoice._id, revision: invoice.revision, status: invoice.status, invoiceNumber: invoice.invoiceNumber,
+        contentHash: await invoiceHash(invoicePayload(invoice.status === 'DRAFT' ? 'DRAFT' : 'GENERATED')) } };
+    }
+    if (epoch !== workspaceEpoch || !state) return;
+    historicalRecord = action === 'correct' ? null : invoice;
+    if (!saveState(false)) throw new Error('Could not store this recovered draft locally. The previous draft is preserved.');
+    replacing = false;
+    init(false); switchScreen('invoice');
+  } catch (error) {
+    if (epoch === workspaceEpoch && state) {
+      if (replacing) { state = previous; historicalRecord = previousRecord; }
+      alert(error.message);
+    }
+  }
+  finally { historyActionBusy = false; button.disabled = false; if (epoch === workspaceEpoch) setInvoiceBusy(false); }
+}
 

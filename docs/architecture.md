@@ -1,4 +1,4 @@
-# Architecture (Phases 0–1)
+# Architecture (Phases 0–2)
 
 ## Actual stack and entry points
 
@@ -36,7 +36,8 @@ backend PORT alone does not update the browser's local API address.
 | GET/POST /api/rates | List and upsert rates |
 | POST /api/rates/calculate | City, state/custom-zone, region, default fallback |
 | POST /api/rates/parse-pdf | In-memory PDF upload, Gemini parsing and retries |
-| POST /api/invoices/save | Upsert invoice and embedded shipments |
+| POST /api/invoices/save | Idempotent create, versioned draft update or finalization |
+| POST /api/invoices/:id/status | Versioned paid/cancellation action with a reason |
 | GET /api/invoices | Paginated listing |
 | GET /api/invoices/search | Text/AWB/date search |
 | GET /api/invoices/:id | ID or invoice-number lookup |
@@ -52,7 +53,7 @@ It calculates current bills locally rather than calling /rates/calculate.
 | --- | --- |
 | localStorage `courier-bill-app-v2` | Current bill and business/customer fields, rates, shipments, uploaded logo/signature data URLs. Saved on edits; JSON export/import covers this state. New bill clears shipments and advances numbering/period. |
 | MongoDB Rate | Shipper, target name/type, minimum kg, per-kg rate; compound unique key. Reviewed AI rates are saved here and locally. Ordinary local edits are not synchronized. |
-| MongoDB Invoice | Unique invoice number, shipper/client details, embedded shipment snapshots, totals, tax, dates, status and notes. Save is an upsert. History reads these documents. |
+| MongoDB Invoice | Unique invoice number, embedded shipments, optional complete layout snapshot, recorded totals, status and notes. Versioned atomic writes and globally unique request IDs protect history; finalized contents are immutable. Legacy records remain read-only. |
 | MongoDB Client | Unique shipper code, name, GST and address. Model exists; no client API in this repository. |
 | MongoDB Shipment | Standalone model plus reusable embedded schema; invoice routes use embedded shipments, not standalone shipment writes. |
 | MongoDB operator_sessions | Signed-cookie server sessions with hashed IDs, absolute expiry and a TTL index. No plaintext operator password. |
@@ -73,6 +74,10 @@ not a single authoritative calculation. Phase 0 characterizes valid inputs witho
 endorsing their inconsistencies or invalid-input coercion.
 
 Tests use Node's built-in runner, Supertest, disposable MongoDB, and Playwright.
-No frontend rewrite or business-data migration is included. See
+Phase 2 defers local draft loading until login and clears private DOM on logout.
+It archives drafts before New Bill/recovery and awaits persistence before final
+printing. No frontend rewrite or destructive business-data migration is included. See
 [security and authentication](security-and-authentication.md) for Phase 1 design,
-credential provisioning, limits, cookie/proxy configuration and remaining risks.
+credential provisioning, limits and cookie/proxy configuration, and
+[invoice persistence](invoice-persistence.md) for lifecycle, retries, reconstruction,
+browser privacy and the unchanged/unverified calculation contracts.

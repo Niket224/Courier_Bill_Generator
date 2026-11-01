@@ -1446,3 +1446,14 @@ select:focus {
 .login-card input { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
 .login-card button { width: 100%; margin-top: 24px; }
 #loginMessage { color: var(--muted); min-height: 3em; }
+.persistence-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px; margin-bottom: 12px; background: var(--surface); border: 1px solid var(--line); }
+#retrySaveButton[hidden] { display: none; }
+@media print {
+  .persistence-panel, .login-panel { display: none !important; }
+  body:not(.final-print) .app-shell { display: none !important; }
+  body:not(.final-print)::after { content: 'No finalized invoice selected. Sign in and use Print after a confirmed save.'; display: block; }
+}
+.history-card { flex-wrap: wrap; }
+.history-card-amount { max-width: 100%; }
+.history-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 100%; }
+.history-actions button { padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-2); color: var(--text); font-size: 12px; }

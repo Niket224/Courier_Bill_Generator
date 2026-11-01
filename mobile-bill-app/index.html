@@ -286,6 +286,16 @@
             </button>
           </div>
 
+          <div class="persistence-panel" aria-live="polite">
+            <strong id="invoiceSaveState">Unsaved</strong>
+            <span id="invoiceSaveMessage">Save a draft or finalize before printing.</span>
+            <button id="saveDraftButton" class="secondary-button" type="button">Save draft</button>
+            <button id="retrySaveButton" class="secondary-button" type="button" hidden>Retry save</button>
+            <details><summary>Additional invoice details</summary>
+              <label>Due date <input id="invoiceDueDate" type="date" /></label>
+              <label>Notes <textarea id="invoiceNotes" maxlength="4000" rows="2"></textarea></label>
+            </details>
+          </div>
           <article class="invoice-paper" id="invoicePaper"></article>
         </section>
 
@@ -345,6 +355,12 @@
             <input id="importInput" type="file" accept="application/json" />
           </div>
 
+          <div class="tool-card">
+            <h3>Recover a local draft</h3>
+            <p>New Bill archives the previous draft on this device. Archives are not encrypted.</p>
+            <select id="draftArchiveSelect" aria-label="Archived drafts"></select>
+            <button id="restoreArchiveButton" class="secondary-button" type="button">Restore selected draft</button>
+          </div>
           <div class="tool-card">
             <h3>Easy Rule</h3>
             <p>Rates ek baar maintain karo. Har bill ke time bas shipment rows add karo. Invoice apne aap banega.</p>
@@ -448,7 +464,8 @@
       </div>
     </div>
 
-    <script src="auth.js?v=1" defer></script>
-    <script src="app.js?v=6" defer></script>
+    <script src="auth.js?v=2" defer></script>
+    <script src="persistence.js?v=1" defer></script>
+    <script src="app.js?v=7" defer></script>
   </body>
 </html>

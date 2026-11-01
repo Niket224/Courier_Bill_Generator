@@ -6,10 +6,12 @@
   let authenticated = false;
   let expiryTimer;
   let signInStarted = false;
+  let generation = 0;
   const panel = document.getElementById('loginPanel');
   const shell = document.querySelector('.app-shell');
   const message = document.getElementById('loginMessage');
   function lock(text = 'Sign in to access your billing workspace.') {
+    generation++;
     csrfToken = null;
     authenticated = false;
     clearTimeout(expiryTimer);
@@ -17,23 +19,32 @@
     panel.hidden = false;
     message.textContent = text;
     document.getElementById('loginPassword').value = '';
+    window.dispatchEvent(new CustomEvent('courier:auth', { detail: false }));
   }
   function unlock(data) {
     if (!data.authenticated || typeof data.csrfToken !== 'string' || !Number.isFinite(data.expiresAt)) throw new Error('Unable to verify session. Please sign in again.');
     csrfToken = data.csrfToken;
     authenticated = true;
+    generation++;
     shell.hidden = false;
     panel.hidden = true;
+    window.dispatchEvent(new CustomEvent('courier:auth', { detail: true }));
     clearTimeout(expiryTimer);
     expiryTimer = setTimeout(() => lock('Your session expired. Sign in again; your draft is preserved.'), Math.max(0, data.expiresAt - Date.now()));
   }
   async function apiFetch(url, options = {}) {
     if (!authenticated) { lock(); throw new Error('Please sign in to continue.'); }
     const headers = new Headers(options.headers);
+    const started = generation;
     if (!['GET', 'HEAD'].includes((options.method || 'GET').toUpperCase())) headers.set('X-CSRF-Token', csrfToken);
     let response;
     try { response = await fetch(url, { ...options, headers, credentials: 'include', cache: 'no-store' }); }
-    catch { throw new Error('Cannot reach the server. Check your connection and try again.'); }
+    catch (cause) {
+      const error = new Error(cause.name === 'AbortError' ? 'Save timed out. Its outcome is unknown; retry the same request to confirm.' : 'Cannot reach the server. Your draft is preserved.');
+      error.code = cause.name === 'AbortError' ? 'TIMEOUT' : 'OFFLINE';
+      throw error;
+    }
+    if (started !== generation || !authenticated) throw new Error('Session changed. Sign in again to confirm the saved state.');
     if (response.status === 401) {
       lock('Your session expired. Sign in again; your draft is preserved.');
       throw new Error('Please sign in again.');
@@ -41,7 +52,10 @@
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
       if (data.code === 'CSRF_INVALID') lock('Your session needs refreshing. Please sign in again.');
-      throw new Error(data.error || 'Unable to complete request. Please try again.');
+      const error = new Error(data.error || 'Unable to complete request. Please try again.');
+      error.code = data.code;
+      error.status = response.status;
+      throw error;
     }
     return response;
   }
@@ -70,7 +84,8 @@
       button.disabled = false;
     }
   });
-  document.getElementById('logoutButton').addEventListener('click', async () => {
+  document.addEventListener('click', async (event) => {
+    if (!event.target.closest('#logoutButton')) return;
     try { await apiFetch(`${base}/auth/logout`, { method: 'POST' }); lock('Signed out. Your draft is preserved on this device.'); }
     catch (error) { if (authenticated) window.alert(error.message); }
   });

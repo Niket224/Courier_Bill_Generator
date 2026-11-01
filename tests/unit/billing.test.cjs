@@ -7,14 +7,15 @@ const fixture = require('../fixtures/bill.json');
 
 function browserLogic() {
   const context = vm.createContext({
-    structuredClone, window: { location: { hostname: 'localhost' }, crypto: { randomUUID: () => 'test-id' } },
+    structuredClone, window: { location: { hostname: 'localhost' }, crypto: { randomUUID: () => 'test-id' }, addEventListener() {}, CourierAuth: { isAuthenticated: () => true } },
     localStorage: { getItem: () => JSON.stringify(fixture) },
-    document: { getElementById: () => null }
+    document: { getElementById: () => null, querySelector: () => null }
   });
   // Execute the actual legacy script, suppressing only its final DOM bootstrap.
   const source = fs.readFileSync(path.resolve(__dirname, '../../mobile-bill-app/app.js'), 'utf8');
-  assert.match(source, /init\(\);\s*$/);
-  vm.runInContext(source.replace(/init\(\);\s*$/, ''), context);
+  assert.ok(source.includes('if (window.CourierAuth.isAuthenticated()) activateWorkspace();'));
+  vm.runInContext(source.replace('if (window.CourierAuth.isAuthenticated()) activateWorkspace();', ''), context);
+  vm.runInContext('state = loadState();', context);
   return (expression) => JSON.parse(JSON.stringify(vm.runInContext(expression, context)));
 }
 

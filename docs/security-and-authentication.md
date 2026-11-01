@@ -1,5 +1,10 @@
 # Phase 1: single-operator security
 
+Phase 2 adds [reliable invoice persistence](invoice-persistence.md). Its authenticated
+workspace now loads drafts only after login and removes private DOM/working state
+on logout, while preserving stored drafts. Final printing requires a confirmed
+save. Use the Phase 2 guide for current save/print/recovery behavior.
+
 ## Design and scope
 
 One operator is configured through server-only environment settings. There is no
@@ -159,8 +164,7 @@ draft-retention policy can change this without silently deleting business data.
 Production HTTPS/proxy behavior, actual operator provisioning, a real Gemini
 extraction, and a full installed-service-worker upgrade need approved staging
 verification. No production start was attempted using existing credentials.
-The existing print flow still starts persistence before print validation and does
-not wait for save completion; local fallback can still overstate rate-save success.
-Billing consistency, stronger domain/import/search validation, immutable invoice
-history, backup/restore drills and operational readiness remain future phases.
-No complete calculation refactor or invoice schema change is included here.
+Phase 2 fixes invoice validation/save/print ordering and protects finalized history.
+Local fallback can still overstate rate-save success; rate management is separate
+from invoice persistence. Authoritative billing calculations, production backup/
+restore drills and operational readiness remain follow-up work.
