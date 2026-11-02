@@ -24,7 +24,7 @@
       if (typeof v !== 'string' && typeof v !== 'number') throw new Error('Invalid bill field.');
       if (['fuelPct', 'cgstPct', 'sgstPct', 'igstPct'].includes(key) && !numeric(v)) throw new Error('Invalid tax or fuel value.');
       if (['invoiceDate', 'periodStart', 'periodEnd'].includes(key) && v && (!/^\d{4}-\d\d-\d\d$/.test(v) || !Number.isFinite(Date.parse(v)) || new Date(v).toISOString().slice(0, 10) !== v)) throw new Error('Invalid bill date.');
-      if (['logoSrc', 'signatureSrc'].includes(key) && v && !['none', 'assets/logo.png'].includes(v) && !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(v)) throw new Error('Unsafe image source.');
+      if (['logoSrc', 'signatureSrc'].includes(key) && v && !['none', 'assets/logo.png'].includes(v) && !/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v)) throw new Error('Unsafe image source.');
     }
     for (const row of value.rates) {
       if (!row || typeof row.id !== 'string' || typeof row.client !== 'string' || typeof row.destination !== 'string' || !['baseKg', 'perKgRate'].every(k => numeric(row[k])) || row.baseRate !== undefined && !numeric(row.baseRate)) throw new Error('Invalid rate structure.');

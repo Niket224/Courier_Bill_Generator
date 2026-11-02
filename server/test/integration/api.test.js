@@ -417,6 +417,46 @@ function financialInput(patch = {}) {
     shipments: [{ awb: 'FIN-AWB', bookingDate: '2026-01-02', destination: 'PATNA', actualWeight: 1, pcs: 1, amount: 45 }],
     subtotal: 54, taxRate: 18, taxAmount: 9.72, totalAmount: 63.72, ...patch };
 }
+test('published 3kg/Rs45 plus Rs20/kg preserves all five shipping amounts and immutable Rs85 history', async () => {
+  const { basePlusExtraRegression: regression } = require('../../../tests/fixtures/billing-golden.json');
+  const shipperCode = 'BASE-EXTRA-20';
+  const card = rateFixtures.card(shipperCode, [{ targetName: 'patna', targetType: 'CITY', ...regression.card }]);
+  await rateFixtures.publishFixture(card);
+  const published = await api.get(`/api/rates?shipperCode=${shipperCode}`).expect(200);
+  for (const key of ['baseKg', 'baseRate', 'perKgRate']) assert.equal(published.body.data[0][key], regression.card[key]);
+  assert.equal(published.body.data[0].approved, true);
+  let historical, fiveKgInput;
+  for (const row of regression.lines) {
+    const input = financialInput({ shipperCode,
+      tax: { mode: 'NONE', fuelPct: 0, cgstPct: 0, sgstPct: 0, igstPct: 0 },
+      shipments: [{ awb: `BASE-${row.weight}`, bookingDate: '2026-01-02', destination: 'PATNA', actualWeight: row.weight, pcs: row.pcs, amount: row.rupees, rateSnapshot: regression.card }],
+      subtotal: row.rupees, taxRate: 0, taxAmount: 0, totalAmount: row.rupees });
+    const quote = await api.post('/api/rates/calculate').send({ shipperCode, destination: 'PATNA', weight: row.weight, pcs: row.pcs }).expect(200);
+    assert.equal(quote.body.calculatedAmount, row.rupees);
+    assert.equal(quote.body.requiresRateReview, false);
+    const calculated = await api.post('/api/invoices/calculate').send(input).expect(200);
+    assert.equal(calculated.body.calculation.lines[0].amountPaise, row.paise);
+    assert.deepEqual(calculated.body.mismatches, []);
+    const saved = (await api.post('/api/invoices/save').send(input).expect(201)).body.data;
+    assert.equal(saved.totalsVerified, true);
+    assert.equal(saved.shipments[0].amount, row.rupees);
+    assert.equal(saved.calculationSnapshot.lines[0].amountPaise, row.paise);
+    assert.deepEqual(saved.calculationSnapshot.appliedRates[0].rate, regression.card);
+    assert.deepEqual(saved.calculationSnapshot.paise, { gross: row.paise, fuel: 0, subtotal: row.paise, cgst: 0, sgst: 0, igst: 0, final: row.paise });
+    if (row.weight === 5) { historical = saved; fiveKgInput = input; assert.notEqual(saved.shipments[0].amount, 100); }
+  }
+  const wrong = { ...fiveKgInput, requestId: randomUUID(), invoiceNumber: `WRONG-${randomUUID()}`,
+    shipments: [{ ...fiveKgInput.shipments[0], amount: 100 }], subtotal: 100, totalAmount: 100 };
+  const rejected = await api.post('/api/invoices/save').send(wrong).expect(422);
+  assert.equal(rejected.body.code, 'CALCULATION_MISMATCH');
+  assert.equal(await Invoice.countDocuments({ invoiceNumber: wrong.invoiceNumber }), 0);
+  await rateFixtures.publishFixture({ ...card, rates: card.rates.map((rate) => ({ ...rate, perKgRate: 99 })) });
+  const replay = await api.post('/api/invoices/save').send(fiveKgInput).expect(200);
+  assert.equal(replay.body.replayed, true);
+  assert.deepEqual(replay.body.data, historical);
+  assert.deepEqual((await api.get(`/api/invoices/${historical._id}`).expect(200)).body.data, historical);
+});
+
 test('server independently verifies new final invoices using published base-charge cards', async () => {
   await financialCard();
   const saved = await api.post('/api/invoices/save').send(financialInput()).expect(201);
@@ -649,6 +689,35 @@ test('incompatible client protocol rejects writes before persistence and correla
   const result = await api.post('/api/invoices/save').set('X-Courier-Protocol', 'future-v999').set('X-Request-ID', 'untrusted-client-id').send(input).expect(409);
   assert.equal(result.body.code, 'CLIENT_VERSION'); assert.notEqual(result.headers['x-request-id'], 'untrusted-client-id');
   assert.equal(await Invoice.countDocuments({ invoiceNumber: input.invoiceNumber }), 0);
+});
+test('status search combines text/date filters and never silently ignores the selected lifecycle', async () => {
+  await Invoice.create(['DRAFT', 'PAID', 'CANCELLED'].map(status => ({ invoiceNumber: `ACCEPT-STATUS-${status}`, shipperCode: 'ACCEPT-SEARCH', clientName: 'Synthetic search acceptance', invoiceDate: new Date('2026-01-15'), shipments: [], subtotal: 0, taxAmount: 0, totalAmount: 0, status })));
+  const result = await api.get('/api/invoices/search?q=ACCEPT-STATUS&status=paid&startDate=2026-01-01&endDate=2026-01-31').expect(200);
+  assert.equal(result.body.count, 1); assert.equal(result.body.data[0].invoiceNumber, 'ACCEPT-STATUS-PAID');
+  assert.equal((await api.get('/api/invoices/search?q=ACCEPT-STATUS&status=GENERATED').expect(200)).body.count, 0);
+  await api.get('/api/invoices/search?status[$ne]=PAID').expect(400);
+});
+test('trusted loopback TLS forwarding sets secure cookies and supports authenticated CSRF requests', async () => {
+  const secured = fresh({ nodeEnv: 'production', trustProxy: 'loopback' });
+  const challenge = await request(secured).get('/api/auth/csrf').set('X-Forwarded-Proto', 'https').expect(200);
+  const challengeCookie = challenge.headers['set-cookie'][0]; assert.match(challengeCookie, /__Host-courier.sid=/); assert.match(challengeCookie, /Secure/); assert.match(challengeCookie, /HttpOnly/); assert.match(challengeCookie, /SameSite=Lax/); assert.ok(!challengeCookie.includes('Domain='));
+  const login = await request(secured).post('/api/auth/login').set('X-Forwarded-Proto', 'https').set('Cookie', challengeCookie.split(';')[0]).set('X-CSRF-Token', challenge.body.csrfToken).send({ username: config.adminUsername, password }).expect(200);
+  const cookie = login.headers['set-cookie'][0].split(';')[0];
+  await request(secured).post('/api/privacy/draft-key').set('X-Forwarded-Proto', 'https').set('Cookie', cookie).set('X-CSRF-Token', login.body.csrfToken).expect(200);
+  await request(secured).post('/api/privacy/draft-key').set('X-Forwarded-Proto', 'https').set('Cookie', cookie).expect(403);
+  const untrusted = fresh({ nodeEnv: 'production', trustProxy: false });
+  const plain = await request(untrusted).get('/api/auth/csrf').set('X-Forwarded-Proto', 'https').expect(200); assert.equal(plain.headers['set-cookie'], undefined);
+});
+test('competing finalization requests cannot overwrite or partially combine the generated invoice', async () => {
+  const body = { invoiceNumber: 'ACCEPT-CONCURRENT-FINAL', shipperCode: 'ACCEPT-FINAL', clientName: 'Synthetic concurrent finalization', invoiceDate: '2026-01-15', status: 'DRAFT',
+    tax: { mode: 'SPLIT', fuelPct: 0, cgstPct: 9, sgstPct: 9, igstPct: 0 }, subtotal: 100, taxRate: 18, taxAmount: 18, totalAmount: 118,
+    shipments: [{ awb: 'ACCEPT-PARALLEL', bookingDate: '2026-01-15', weight: 1, pcs: 1, manualAmount: 100, amount: 100 }] };
+  const saved = await api.post('/api/invoices/save').send({ ...body, requestId: randomUUID(), expectedVersion: 0 }).expect(201);
+  const results = await Promise.all([1, 2].map(() => api.post('/api/invoices/save').send({ ...body, status: 'GENERATED', expectedVersion: 1, requestId: randomUUID() })));
+  assert.deepEqual(results.map(result => result.status).sort(), [200, 409]);
+  const final = await Invoice.findById(saved.body.data._id).lean();
+  assert.equal(final.status, 'GENERATED'); assert.equal(final.revision, 2); assert.equal(final.operations.length, 2); assert.equal(final.totalAmount, 118); assert.equal(final.calculationSnapshot.paise.final, 11800);
+  assert.equal(await Invoice.countDocuments({ invoiceNumber: body.invoiceNumber }), 1);
 });
 test('disconnected isolated database fails safely without buffering a write', async () => {
   const memory = new (require('../../node_modules/express-session').MemoryStore)();

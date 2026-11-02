@@ -7,7 +7,7 @@
     <title>Courier Bill App</title>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=5" />
+    <link rel="stylesheet" href="styles.css?v=6" />
   </head>
   <body>
     <section id="loginPanel" class="login-panel" aria-labelledby="loginTitle">
@@ -332,6 +332,7 @@
                 End Date
                 <input id="historyEndDate" type="date" />
               </label>
+              <label>Status<select id="historyStatus"><option value="">All statuses</option><option>DRAFT</option><option>GENERATED</option><option>PAID</option><option>CANCELLED</option></select></label>
             </div>
             <div class="quick-actions">
               <button class="primary-button" id="executeSearchButton" type="button">
@@ -486,12 +487,12 @@
     </div>
 
     <script src="billing.js?v=1" defer></script>
-    <script src="browser-data.js?v=1" defer></script>
+    <script src="browser-data.js?v=2" defer></script>
     <script src="draft-vault.js?v=1" defer></script>
     <script src="rate-card.js?v=1" defer></script>
     <script src="rate-review.js?v=2" defer></script>
     <script src="auth.js?v=5" defer></script>
     <script src="persistence.js?v=2" defer></script>
-    <script src="app.js?v=10" defer></script>
+    <script src="app.js?v=11" defer></script>
   </body>
 </html>

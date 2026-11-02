@@ -793,6 +793,15 @@ select:focus {
 .invoice-table th {
   background: #d9ead3;
 }
+.invoice-table { table-layout: fixed; }
+.invoice-table td, .invoice-meta > div, .invoice-header-text, .signature-for { overflow-wrap: anywhere; }
+.invoice-audit-label { border: 2px solid currentColor; padding: 8px; margin-bottom: 12px; font-weight: 800; }
+@media print {
+  @page { size: A4; margin: 12mm; }
+  .invoice-table thead { display: table-header-group; }
+  .invoice-table th, .invoice-table td { padding: 3px 5px; line-height: 1.25; }
+  .invoice-table tr, .invoice-print-footer, .signature-block { break-inside: avoid; }
+}
 
 .invoice-table td:nth-child(1),
 .invoice-table td:nth-child(5),

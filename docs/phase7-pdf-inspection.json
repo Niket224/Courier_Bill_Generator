@@ -1,0 +1,62 @@
+{
+  "scope": "Synthetic PDF text, page count and bounds; visual review is separate; physical printing NOT VERIFIED",
+  "result": "PASS",
+  "results": [
+    {
+      "file": "synthetic-monthly-100-desktop.pdf",
+      "pages": 3,
+      "words": 914,
+      "content": "PASS",
+      "pageBounds": "PASS"
+    },
+    {
+      "file": "synthetic-correction-100-desktop.pdf",
+      "pages": 3,
+      "words": 917,
+      "content": "PASS",
+      "pageBounds": "PASS"
+    },
+    {
+      "file": "synthetic-cancelled-100-desktop.pdf",
+      "pages": 3,
+      "words": 922,
+      "content": "PASS",
+      "pageBounds": "PASS"
+    },
+    {
+      "file": "synthetic-single-long-fields-desktop.pdf",
+      "pages": 1,
+      "words": 150,
+      "content": "PASS",
+      "pageBounds": "PASS"
+    },
+    {
+      "file": "synthetic-monthly-100-mobile.pdf",
+      "pages": 3,
+      "words": 914,
+      "content": "PASS",
+      "pageBounds": "PASS"
+    },
+    {
+      "file": "synthetic-correction-100-mobile.pdf",
+      "pages": 3,
+      "words": 917,
+      "content": "PASS",
+      "pageBounds": "PASS"
+    },
+    {
+      "file": "synthetic-cancelled-100-mobile.pdf",
+      "pages": 3,
+      "words": 922,
+      "content": "PASS",
+      "pageBounds": "PASS"
+    },
+    {
+      "file": "synthetic-single-long-fields-mobile.pdf",
+      "pages": 1,
+      "words": 150,
+      "content": "PASS",
+      "pageBounds": "PASS"
+    }
+  ]
+}

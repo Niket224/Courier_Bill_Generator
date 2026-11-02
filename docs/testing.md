@@ -1,5 +1,28 @@
 # Testing and local setup
 
+## Phase 7 final acceptance
+
+The prior 311 scenarios remain covered. New coverage exercises static path safety,
+an actual coverage-gate failure, lifecycle status search, trusted forwarding/cookies,
+competing finalization, the independent 100-shipment monthly cycle, long-field PDFs,
+historical text escaping and expiry during history recovery. Existing legacy browser
+backup compatibility also checks safe GIF images. See [final results](phase7-test-results.txt),
+[threshold-enforced coverage](phase7-coverage.txt), and [acceptance report](final-production-acceptance.md).
+
+Install root dependencies with MONGOMS_DISABLE_POSTINSTALL=1 in the installation
+environment to avoid the package's unused unpinned default binary download. The
+tests still create owned loopback instances using explicitly pinned MongoDB 7.0.24.
+Run `npm test`, `npm run test:coverage`, `npm run check`, `npm run check:secrets`, both
+audits, `npm run test:operations` and `npm run test:performance`.
+
+PDF inspection additionally needs Poppler (`pdfinfo`, `pdftotext`, `pdftoppm`).
+CI installs poppler-utils on its ephemeral runner; the local Windows run used a
+checksum-verified portable distribution in a temporary directory, not an application
+dependency. After browser tests, run `node scripts/verify-acceptance-pdfs.cjs`, or
+pass `--bin-dir` with the local tools directory. It validates eight synthetic PDFs,
+all AWBs, totals/labels, page dimensions/counts and word bounds. Raster review is
+separate. No physical-printer or representative hosted verification is claimed.
+
 ## Phase 6 operations and CI checks
 
 Run `npm run check` for all source JavaScript syntax and workflow JSON/YAML safety

@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import envValidation from "../server/config/env.js";
+import staticPaths from './static-path.cjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..", "mobile-bill-app");
@@ -19,15 +20,7 @@ const mimeTypes = new Map([
 ]);
 
 function resolveRequestPath(url) {
-  const pathname = decodeURIComponent(new URL(url, `http://localhost:${port}`).pathname);
-  const requested = pathname === "/" ? "/index.html" : pathname;
-  const resolved = path.resolve(root, `.${requested}`);
-
-  if (!resolved.startsWith(root)) {
-    return null;
-  }
-
-  return resolved;
+  return staticPaths.resolvePublicPath(root, url);
 }
 
 const server = createServer(async (req, res) => {

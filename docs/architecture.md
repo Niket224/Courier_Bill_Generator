@@ -1,4 +1,14 @@
-# Architecture (Phases 0–6)
+# Architecture (Phases 0–7)
+
+Phase 7 audits the full current stack and adds targeted acceptance corrections:
+status filtering in history/search, safe static-file resolution, escaped historical
+amount words, a session-epoch check after asynchronous history archival, compatible
+GIF browser exports, and labelled cancelled/corrected record printing. No pricing
+formula or destructive schema change was introduced. Current assets use SW v13,
+app v11, styles v6 and browser-data v2; API protocol remains courier-api-v1.
+The [final acceptance](final-production-acceptance.md) and
+[GO/NO-GO decision](production-go-no-go.md) keep local evidence distinct from
+unverified production/staging/business prerequisites.
 
 Phase 6 adds a long-lived runtime controller with pre-listen index initialization,
 MongoDB/session readiness, graceful drain and privacy-safe request correlation.

@@ -23,7 +23,7 @@ async function main() {
     runtime = await measure('startupMs', begin);
     const agent = request.agent(runtime.app);
     const challenge = await agent.get('/api/auth/csrf').expect(200);
-    const login = await agent.post('/api/auth/login').set('X-CSRF-Token', challenge.body.csrfToken).send({ username: config.adminUsername, password }).expect(200);
+    const login = await measure('loginMs', () => agent.post('/api/auth/login').set('X-CSRF-Token', challenge.body.csrfToken).send({ username: config.adminUsername, password }).expect(200));
     const csrf = login.body.csrfToken;
     const adapter = require('../mobile-bill-app/persistence'), Billing = require('../mobile-bill-app/billing');
     const fixture = structuredClone(require('../tests/fixtures/bill.json')); fixture.bill.invoiceNo = 'DRILL-100'; fixture.rates[0].baseRate = 90;
@@ -46,11 +46,13 @@ async function main() {
     await request(runtime.app).get(`/api/invoices/${final.body.data._id}`).set('Cookie', oldCookie).expect(200);
     const client = mongoose.connection.getClient(), Recovery = require('../server/services/businessRecovery'), Archive = require('../server/services/backupArchive');
     const beforeRss = process.memoryUsage().rss;
+    const backupStarted = performance.now();
     const manifest = await measure('consistentCaptureMs', () => Recovery.capture(client, database));
     const key = randomBytes(32); const encrypted = await measure('encryptMs', async () => Archive.seal(manifest, key));
     temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'courier-drill-')); const file = path.join(temporary, 'synthetic.cbackup');
     await measure('verifiedBackupFileMs', () => require('../server/services/backupFile').writeVerifiedArchive(file, encrypted, key));
     const checked = Archive.open(await fs.readFile(file), key);
+    samples.backupCreateAndVerifyMs = [Number((performance.now() - backupStarted).toFixed(3))];
     const restored = await measure('restoreAndVerifyMs', () => Recovery.restore(client, checked));
     const recovered = await client.db(restored.database).collection('invoices').findOne({ invoiceNumber: 'RECOVERY-GENERATED' });
     assert.equal(recovered.totalAmount, 63.72); assert.equal(recovered.calculationSnapshot.appliedRates[0].rate.baseRate, 45);
@@ -61,9 +63,11 @@ async function main() {
     const query = { examined: explain.executionStats.totalDocsExamined, returned: explain.executionStats.nReturned, keysExamined: explain.executionStats.totalKeysExamined };
     const searchExplain = await mongoose.connection.db.collection('invoices').find({ $or: ['shipments.awb', 'shipperCode', 'clientName', 'invoiceNumber'].map(field => ({ [field]: { $regex: 'DRILL', $options: 'i' } })) }).explain('executionStats');
     query.searchDocsExamined = searchExplain.executionStats.totalDocsExamined; query.searchReturned = searchExplain.executionStats.nReturned;
+    let databaseMemory = { status: 'NOT_MEASURABLE' };
+    try { const status = await client.db('admin').command({ serverStatus: 1 }); databaseMemory = { status: 'MEASURED_LOCAL_MONGOD', residentMb: status.mem.resident, virtualMb: status.mem.virtual }; } catch { /* Report unavailable instead of inventing database memory. */ }
     assert.equal(query.examined, 1);
     const summaries = Object.fromEntries(Object.entries(samples).map(([name, values]) => { const sorted = [...values].sort((a, b) => a - b); return [name, { samples: values.length, mean: Number((values.reduce((a, b) => a + b, 0) / values.length).toFixed(3)), p95: sorted[Math.ceil(sorted.length * .95) - 1], max: sorted.at(-1) }]; }));
-    const report = { scope: 'Local synthetic disposable MongoDB replica set; not representative hosted staging or an RPO/RTO guarantee', node: process.version, platform: process.platform, measuredAt: new Date().toISOString(), result: 'PASS', records: manifest.inventory.map(({ name, count }) => ({ name, count })), archiveBytes: encrypted.length, metrics: summaries, processRssBytes: { beforeBackup: beforeRss, afterRestore: process.memoryUsage().rss }, indexedInvoiceLookup: query, verified: ['real isolated restore', 'wrong key rejected', 'corruption rejected', 'interrupted restore quarantined', 'session and invoice survive restart', 'historical amounts unchanged'], hostedStaging: 'BLOCKED: no designated hosted staging resources or credentials' };
+    const report = { scope: 'Local synthetic disposable MongoDB replica set; not representative hosted staging or an RPO/RTO guarantee', node: process.version, platform: process.platform, measuredAt: new Date().toISOString(), result: 'PASS', records: manifest.inventory.map(({ name, count }) => ({ name, count })), archiveBytes: encrypted.length, metrics: summaries, processRssBytes: { beforeBackup: beforeRss, afterRestore: process.memoryUsage().rss }, databaseMemory, indexedInvoiceLookup: query, verified: ['real isolated restore', 'wrong key rejected', 'corruption rejected', 'interrupted restore quarantined', 'session and invoice survive restart', 'historical amounts unchanged'], hostedStaging: 'BLOCKED: no designated hosted staging resources or credentials' };
     await fs.mkdir('outputs', { recursive: true }); await fs.writeFile('outputs/operations-drill.json', JSON.stringify(report, null, 2)); console.log(JSON.stringify(report, null, 2));
   } finally {
     if (runtime) await runtime.shutdown(); await mongoose.disconnect(); if (mongo) await mongo.stop();

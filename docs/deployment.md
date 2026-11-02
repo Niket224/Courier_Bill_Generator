@@ -1,5 +1,12 @@
 # Deployment architecture and release checklist
 
+Phase 7 release candidates use Courier SW cache v13, app.js v11, styles v6 and
+browser-data v2. Deploy these together with the backend status-filter fix and shared
+modules. Protocol courier-api-v1, invoice schema 2/3, calculation courier-v1, browser
+vault v1 and backup format v1/schema 5 are unchanged. The strengthened static-host
+example denies private paths; actual host configuration still requires validation.
+See [release gates](release-readiness-checklist.md) before any production action.
+
 ## Audited requirements
 
 The app is static HTML/CSS/plain JavaScript plus a long-lived Express process and MongoDB. There is no frontend compilation, container manifest or configured hosting provider. The production browser calls same-origin `/api`; local development calls port 5000 on the same hostname. Serve both surfaces behind one HTTPS origin. Deploy the shared browser modules with the backend: backend services import them directly.

@@ -1,0 +1,149 @@
+
+> courier-bill-generator@1.0.0 test:operations
+> node scripts/run-operations-drill.mjs
+
+{
+  "scope": "Local synthetic disposable MongoDB replica set; not representative hosted staging or an RPO/RTO guarantee",
+  "node": "v24.22.1",
+  "platform": "win32",
+  "measuredAt": "2026-11-02T03:32:24.201Z",
+  "result": "PASS",
+  "records": [
+    {
+      "name": "clients",
+      "count": 2
+    },
+    {
+      "name": "invoices",
+      "count": 6
+    },
+    {
+      "name": "shipments",
+      "count": 1
+    },
+    {
+      "name": "rates",
+      "count": 0
+    },
+    {
+      "name": "ratecarddrafts",
+      "count": 2
+    },
+    {
+      "name": "ratebooks",
+      "count": 1
+    }
+  ],
+  "archiveBytes": 200222,
+  "metrics": {
+    "startupMs": {
+      "samples": 1,
+      "mean": 531.997,
+      "p95": 531.997,
+      "max": 531.997
+    },
+    "loginMs": {
+      "samples": 1,
+      "mean": 459.674,
+      "p95": 459.674,
+      "max": 459.674
+    },
+    "draftCreate100Ms": {
+      "samples": 1,
+      "mean": 87.912,
+      "p95": 87.912,
+      "max": 87.912
+    },
+    "finalize100Ms": {
+      "samples": 1,
+      "mean": 132.5,
+      "p95": 132.5,
+      "max": 132.5
+    },
+    "readinessMs": {
+      "samples": 20,
+      "mean": 7.433,
+      "p95": 10.835,
+      "max": 13.625
+    },
+    "invoiceSearchMs": {
+      "samples": 20,
+      "mean": 41.175,
+      "p95": 57.719,
+      "max": 65.288
+    },
+    "invoiceRead100Ms": {
+      "samples": 20,
+      "mean": 23.151,
+      "p95": 33.019,
+      "max": 33.57
+    },
+    "gracefulShutdownMs": {
+      "samples": 1,
+      "mean": 8.231,
+      "p95": 8.231,
+      "max": 8.231
+    },
+    "restartMs": {
+      "samples": 1,
+      "mean": 31.052,
+      "p95": 31.052,
+      "max": 31.052
+    },
+    "consistentCaptureMs": {
+      "samples": 1,
+      "mean": 55.001,
+      "p95": 55.001,
+      "max": 55.001
+    },
+    "encryptMs": {
+      "samples": 1,
+      "mean": 9.038,
+      "p95": 9.038,
+      "max": 9.038
+    },
+    "verifiedBackupFileMs": {
+      "samples": 1,
+      "mean": 78.324,
+      "p95": 78.324,
+      "max": 78.324
+    },
+    "backupCreateAndVerifyMs": {
+      "samples": 1,
+      "mean": 171.824,
+      "p95": 171.824,
+      "max": 171.824
+    },
+    "restoreAndVerifyMs": {
+      "samples": 1,
+      "mean": 1452.27,
+      "p95": 1452.27,
+      "max": 1452.27
+    }
+  },
+  "processRssBytes": {
+    "beforeBackup": 170397696,
+    "afterRestore": 175656960
+  },
+  "databaseMemory": {
+    "status": "MEASURED_LOCAL_MONGOD",
+    "residentMb": 138,
+    "virtualMb": 4509
+  },
+  "indexedInvoiceLookup": {
+    "examined": 1,
+    "returned": 1,
+    "keysExamined": 1,
+    "searchDocsExamined": 6,
+    "searchReturned": 2
+  },
+  "verified": [
+    "real isolated restore",
+    "wrong key rejected",
+    "corruption rejected",
+    "interrupted restore quarantined",
+    "session and invoice survive restart",
+    "historical amounts unchanged"
+  ],
+  "hostedStaging": "BLOCKED: no designated hosted staging resources or credentials"
+}

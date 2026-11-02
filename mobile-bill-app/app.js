@@ -469,6 +469,8 @@ function renderInvoice(record = historicalRecord) {
   const logoHtml = (state.bill.logoSrc && state.bill.logoSrc !== "none")
     ? `<img src="${escapeHtml(safeImageSource(state.bill.logoSrc))}" class="invoice-logo" alt="Logo" />`
     : "";
+  const auditLabel = [record?.status === 'CANCELLED' ? 'CANCELLED - historical record' : '',
+    (record?.correctionOf || state.correctionOf) ? `CORRECTION OF: ${record?.correctionOf || state.correctionOf}` : ''].filter(Boolean).join(' | ');
 
   document.getElementById("invoicePaper").innerHTML = `
     <div class="invoice-header ${state.bill.logoSrc && state.bill.logoSrc !== 'none' ? 'has-logo' : ''}">
@@ -495,7 +497,9 @@ function renderInvoice(record = historicalRecord) {
         <div>PERIOD : ${formatDate(state.bill.periodStart)} TO ${formatDate(state.bill.periodEnd)}</div>
       </div>
     </div>
+    ${auditLabel ? `<div class="invoice-audit-label">${escapeHtml(auditLabel)}</div>` : ''}
     <table class="invoice-table">
+      <colgroup><col style="width:5%"><col style="width:20%"><col style="width:12%"><col style="width:19%"><col style="width:6%"><col style="width:5%"><col style="width:12%"><col style="width:21%"></colgroup>
       <thead>
         <tr>
           <th>S.NO</th>
@@ -510,7 +514,7 @@ function renderInvoice(record = historicalRecord) {
       </thead>
       <tbody>${rows || `<tr><td colspan="8">No shipments added</td></tr>`}</tbody>
     </table>
-    <div class="totals-wrap">
+    <div class="invoice-print-footer"><div class="totals-wrap">
       <table class="totals-table">
         <tr><td>G TOTAL: RS</td><td>${plainMoney(total.gross)}</td></tr>
         <tr><td>Fuel charge @ ${plainMoney(state.bill.fuelPct)}%</td><td>${plainMoney(total.fuel)}</td></tr>
@@ -519,7 +523,7 @@ function renderInvoice(record = historicalRecord) {
         <tr><td>BILL AMOUNT</td><td>${plainMoney(total.final)}</td></tr>
       </table>
     </div>
-    <div class="amount-words">RUPEES: ${record ? (record.calculationSnapshot?.amountWords || legacyNumberToWordsIndian(total.final)) : numberToWordsIndian(total.final)} ONLY</div>
+    <div class="amount-words">RUPEES: ${escapeHtml(record ? (record.calculationSnapshot?.amountWords || legacyNumberToWordsIndian(total.final)) : numberToWordsIndian(total.final))} ONLY</div>
     <div class="invoice-bottom-row">
       <div class="e-oe">E.&amp; O.E.</div>
       <div class="signature-block">
@@ -531,6 +535,7 @@ function renderInvoice(record = historicalRecord) {
         </div>
         <div class="signature-title">PROPRIETOR / AUTHORISED SIGNATORY</div>
       </div>
+    </div>
     </div>
   `;
 }
@@ -1173,6 +1178,7 @@ function setupHistoryTab() {
     document.getElementById("historySearchInput").value = "";
     document.getElementById("historyStartDate").value = "";
     document.getElementById("historyEndDate").value = "";
+    document.getElementById('historyStatus').value = '';
     fetchPastInvoices();
   });
 }
@@ -1193,6 +1199,8 @@ async function fetchPastInvoices() {
   }
   if (startDate) params.append("startDate", startDate);
   if (endDate) params.append("endDate", endDate);
+  const status = document.getElementById('historyStatus')?.value;
+  if (status) params.append('status', status);
 
   try {
     const res = await window.CourierAuth.apiFetch(`${API_BASE}/invoices/search?${params.toString()}`);
@@ -1282,14 +1290,14 @@ async function persistInvoiceToBackend(status = 'DRAFT', printAfter = false) {
     const meta = current.persistence ||= {};
     const controller = new AbortController();
     timeout = setTimeout(() => controller.abort(), 15000);
-    if (!meta.pending && meta.confirmed?.invoiceNumber === payload.invoiceNumber && ['GENERATED', 'PAID'].includes(meta.confirmed.status)) {
+    if (!meta.pending && meta.confirmed?.invoiceNumber === payload.invoiceNumber && ['GENERATED', 'PAID', 'CANCELLED'].includes(meta.confirmed.status)) {
       if (meta.confirmed.contentHash !== contentHash) throw new Error('This invoice is finalized. Use New Bill or create a correction; its history will not be overwritten.');
       setInvoiceSaveState('Saving', 'Confirming the saved invoice before final printing…');
       const response = await window.CourierAuth.apiFetch(`${API_BASE}/invoices/${meta.confirmed.id}`, { signal: controller.signal });
       const result = await response.json();
-      if (!result.success || result.data.revision !== meta.confirmed.revision || !['GENERATED', 'PAID'].includes(result.data.status)) throw new Error('Saved invoice changed or was cancelled. Reload it from History.');
+      if (!result.success || result.data.revision !== meta.confirmed.revision || result.data.status !== meta.confirmed.status) throw new Error('Saved invoice status changed. Reload it from History.');
       if (state !== current || epoch !== workspaceEpoch) return false;
-      setInvoiceSaveState('Saved', result.data.totalsVerified ? 'Finalized invoice confirmed; server calculation verified.' : 'Historical invoice confirmed; original unverified amounts preserved.');
+      setInvoiceSaveState('Saved', result.data.status === 'CANCELLED' ? 'Cancelled historical record confirmed. Any print is labelled CANCELLED.' : result.data.totalsVerified ? 'Finalized invoice confirmed; server calculation verified.' : 'Historical invoice confirmed; original unverified amounts preserved.');
       if (printAfter) finalPrint(result.data);
       return true;
     }
@@ -1491,6 +1499,7 @@ async function handleHistoryAction(event) {
       const reason = prompt('Reason for correction:');
       if (!number?.trim() || !reason?.trim() || !confirm('This older record lacks complete billing metadata. Create an empty linked draft and enter its missing details manually?')) return;
       if (!await archiveCurrentDraft()) return;
+      if (epoch !== workspaceEpoch || !state || !window.CourierAuth.isAuthenticated()) return;
       replacing = true;
       state = { ...state, bill: { ...state.bill, invoiceNo: number.trim(), shipperCode: invoice.shipperCode, billTo: invoice.clientName || '', gstNo: invoice.clientGst || '' },
         shipments: [], correctionOf: invoice.invoiceNumber, correctionReason: reason.trim(), invoiceMetadata: { client: null, notes: invoice.notes || '' } };
@@ -1507,6 +1516,7 @@ async function handleHistoryAction(event) {
       if (!correctedNumber?.trim() || !reason?.trim()) return;
     }
     if (!await archiveCurrentDraft()) return;
+    if (epoch !== workspaceEpoch || !state || !window.CourierAuth.isAuthenticated()) return;
     replacing = true;
     state = { bill: structuredClone(invoice.snapshot.bill), rates: structuredClone(invoice.snapshot.rates), shipments: invoice.shipments.map((s) => ({
       id: s.sourceId || crypto.randomUUID(), cno: s.awb, date: s.bookingDate.slice(0, 10), destination: s.destination, origin: s.origin,

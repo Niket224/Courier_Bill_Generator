@@ -1,0 +1,289 @@
+{
+  "operations": {
+    "scope": "Local synthetic disposable MongoDB replica set; not representative hosted staging or an RPO/RTO guarantee",
+    "node": "v24.22.1",
+    "platform": "win32",
+    "measuredAt": "2026-11-02T03:32:24.201Z",
+    "result": "PASS",
+    "records": [
+      {
+        "name": "clients",
+        "count": 2
+      },
+      {
+        "name": "invoices",
+        "count": 6
+      },
+      {
+        "name": "shipments",
+        "count": 1
+      },
+      {
+        "name": "rates",
+        "count": 0
+      },
+      {
+        "name": "ratecarddrafts",
+        "count": 2
+      },
+      {
+        "name": "ratebooks",
+        "count": 1
+      }
+    ],
+    "archiveBytes": 200222,
+    "metrics": {
+      "startupMs": {
+        "samples": 1,
+        "mean": 531.997,
+        "p95": 531.997,
+        "max": 531.997
+      },
+      "loginMs": {
+        "samples": 1,
+        "mean": 459.674,
+        "p95": 459.674,
+        "max": 459.674
+      },
+      "draftCreate100Ms": {
+        "samples": 1,
+        "mean": 87.912,
+        "p95": 87.912,
+        "max": 87.912
+      },
+      "finalize100Ms": {
+        "samples": 1,
+        "mean": 132.5,
+        "p95": 132.5,
+        "max": 132.5
+      },
+      "readinessMs": {
+        "samples": 20,
+        "mean": 7.433,
+        "p95": 10.835,
+        "max": 13.625
+      },
+      "invoiceSearchMs": {
+        "samples": 20,
+        "mean": 41.175,
+        "p95": 57.719,
+        "max": 65.288
+      },
+      "invoiceRead100Ms": {
+        "samples": 20,
+        "mean": 23.151,
+        "p95": 33.019,
+        "max": 33.57
+      },
+      "gracefulShutdownMs": {
+        "samples": 1,
+        "mean": 8.231,
+        "p95": 8.231,
+        "max": 8.231
+      },
+      "restartMs": {
+        "samples": 1,
+        "mean": 31.052,
+        "p95": 31.052,
+        "max": 31.052
+      },
+      "consistentCaptureMs": {
+        "samples": 1,
+        "mean": 55.001,
+        "p95": 55.001,
+        "max": 55.001
+      },
+      "encryptMs": {
+        "samples": 1,
+        "mean": 9.038,
+        "p95": 9.038,
+        "max": 9.038
+      },
+      "verifiedBackupFileMs": {
+        "samples": 1,
+        "mean": 78.324,
+        "p95": 78.324,
+        "max": 78.324
+      },
+      "backupCreateAndVerifyMs": {
+        "samples": 1,
+        "mean": 171.824,
+        "p95": 171.824,
+        "max": 171.824
+      },
+      "restoreAndVerifyMs": {
+        "samples": 1,
+        "mean": 1452.27,
+        "p95": 1452.27,
+        "max": 1452.27
+      }
+    },
+    "processRssBytes": {
+      "beforeBackup": 170397696,
+      "afterRestore": 175656960
+    },
+    "databaseMemory": {
+      "status": "MEASURED_LOCAL_MONGOD",
+      "residentMb": 138,
+      "virtualMb": 4509
+    },
+    "indexedInvoiceLookup": {
+      "examined": 1,
+      "returned": 1,
+      "keysExamined": 1,
+      "searchDocsExamined": 6,
+      "searchReturned": 2
+    },
+    "verified": [
+      "real isolated restore",
+      "wrong key rejected",
+      "corruption rejected",
+      "interrupted restore quarantined",
+      "session and invoice survive restart",
+      "historical amounts unchanged"
+    ],
+    "hostedStaging": "BLOCKED: no designated hosted staging resources or credentials"
+  },
+  "calculation": {
+    "node": "v24.22.1",
+    "platform": "win32",
+    "scope": "Pure calculation only, warm cache; no DOM, database or network",
+    "results": [
+      {
+        "shipments": 100,
+        "samples": 50,
+        "meanMs": 0.24,
+        "p95Ms": 0.469,
+        "maxMs": 0.65
+      },
+      {
+        "shipments": 500,
+        "samples": 50,
+        "meanMs": 0.73,
+        "p95Ms": 1.404,
+        "maxMs": 2.097
+      },
+      {
+        "shipments": 1000,
+        "samples": 50,
+        "meanMs": 1.283,
+        "p95Ms": 1.976,
+        "maxMs": 2.211
+      }
+    ]
+  },
+  "browser": [
+    {
+      "baseline100": {
+        "project": "desktop",
+        "shipments": 100,
+        "samples": 1,
+        "renderAndTwoFramesMs": 102.5,
+        "printTextCaptureMs": 0,
+        "pdfGenerationMs": 326.1828999999998,
+        "pdfPages": 3,
+        "pdfBytes": 65521,
+        "nativePrintDialogMeasured": false,
+        "scope": "Synthetic Chromium rendering, print content and actual multipage PDF generation; not physical printing or hosted latency"
+      },
+      "monthly": {
+        "result": "PASS",
+        "expected": {
+          "gross": 8625,
+          "fuel": 1078.13,
+          "subtotal": 9703.13,
+          "cgst": 873.28,
+          "sgst": 873.28,
+          "igst": 0,
+          "final": 11449.69
+        },
+        "shipments": 100,
+        "scenarios": 16,
+        "correctionLinked": true,
+        "lostResponseReplayedExactlyOnce": true,
+        "pdfs": [
+          {
+            "file": "synthetic-monthly-100-desktop.pdf",
+            "pages": 3,
+            "bytes": 65390,
+            "generationMs": 316.8832000000002
+          },
+          {
+            "file": "synthetic-correction-100-desktop.pdf",
+            "pages": 3,
+            "bytes": 65601,
+            "generationMs": 97.21419999999944
+          },
+          {
+            "file": "synthetic-cancelled-100-desktop.pdf",
+            "pages": 3,
+            "bytes": 66641,
+            "generationMs": 129.63440000000082
+          }
+        ]
+      },
+      "singlePage": {
+        "file": "synthetic-single-long-fields-desktop.pdf",
+        "pages": 1,
+        "bytes": 59858,
+        "generationMs": 253.08190000000104
+      }
+    },
+    {
+      "baseline100": {
+        "project": "mobile",
+        "shipments": 100,
+        "samples": 1,
+        "renderAndTwoFramesMs": 49.5,
+        "printTextCaptureMs": 0,
+        "pdfGenerationMs": 302.2479000000021,
+        "pdfPages": 3,
+        "pdfBytes": 65680,
+        "nativePrintDialogMeasured": false,
+        "scope": "Synthetic Chromium rendering, print content and actual multipage PDF generation; not physical printing or hosted latency"
+      },
+      "monthly": {
+        "result": "PASS",
+        "expected": {
+          "gross": 8625,
+          "fuel": 1078.13,
+          "subtotal": 9703.13,
+          "cgst": 873.28,
+          "sgst": 873.28,
+          "igst": 0,
+          "final": 11449.69
+        },
+        "shipments": 100,
+        "scenarios": 16,
+        "correctionLinked": true,
+        "lostResponseReplayedExactlyOnce": true,
+        "pdfs": [
+          {
+            "file": "synthetic-monthly-100-mobile.pdf",
+            "pages": 3,
+            "bytes": 66249,
+            "generationMs": 319.5598
+          },
+          {
+            "file": "synthetic-correction-100-mobile.pdf",
+            "pages": 3,
+            "bytes": 66457,
+            "generationMs": 109.73930000000018
+          },
+          {
+            "file": "synthetic-cancelled-100-mobile.pdf",
+            "pages": 3,
+            "bytes": 67496,
+            "generationMs": 153.54240000000027
+          }
+        ]
+      },
+      "singlePage": {
+        "file": "synthetic-single-long-fields-mobile.pdf",
+        "pages": 1,
+        "bytes": 60039,
+        "generationMs": 238.8679000000011
+      }
+    }
+  ]
+}

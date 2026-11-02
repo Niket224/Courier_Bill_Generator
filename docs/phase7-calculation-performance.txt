@@ -1,0 +1,32 @@
+
+> courier-bill-generator@1.0.0 test:performance
+> node scripts/benchmark-billing.cjs
+
+{
+  "node": "v24.22.1",
+  "platform": "win32",
+  "scope": "Pure calculation only, warm cache; no DOM, database or network",
+  "results": [
+    {
+      "shipments": 100,
+      "samples": 50,
+      "meanMs": 0.24,
+      "p95Ms": 0.469,
+      "maxMs": 0.65
+    },
+    {
+      "shipments": 500,
+      "samples": 50,
+      "meanMs": 0.73,
+      "p95Ms": 1.404,
+      "maxMs": 2.097
+    },
+    {
+      "shipments": 1000,
+      "samples": 50,
+      "meanMs": 1.283,
+      "p95Ms": 1.976,
+      "maxMs": 2.211
+    }
+  ]
+}

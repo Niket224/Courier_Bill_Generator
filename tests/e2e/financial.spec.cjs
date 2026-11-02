@@ -2,6 +2,7 @@ const { test, expect } = require('@playwright/test');
 const { createHash } = require('node:crypto');
 const fixture = require('../fixtures/bill.json');
 const { password } = require('../fixtures/auth.cjs');
+const { basePlusExtraRegression: regression } = require('../fixtures/billing-golden.json');
 let cookies;
 test.beforeAll(async ({ playwright }) => {
   const client = await playwright.request.newContext({ baseURL: 'http://127.0.0.1:4189' });
@@ -50,6 +51,57 @@ async function finalize(page) {
   await expect(page.locator('#invoiceSaveMessage')).toContainText('Server calculation verified');
   return page.evaluate(async () => (await (await window.CourierAuth.apiFetch(`${API_BASE}/invoices/${state.persistence.confirmed.id}`)).json()).data);
 }
+test('base-plus-extra regression: preview, published mapping, backend and historical print agree on Rs85, never Rs100', async ({ page }) => {
+  await page.evaluate((card) => {
+    state.rates = [{ ...state.rates[0], ...card }];
+    Object.assign(state.bill, { taxMode: 'NONE', fuelPct: 0, cgstPct: 0, sgstPct: 0, igstPct: 0 });
+    Object.assign(state.shipments[0], { pcs: 1, manualAmount: '' });
+    saveState(); init(false);
+  }, regression.card);
+  await publish(page);
+  // Exercise the separate API-to-browser mapping as well as the publication callback.
+  const localRateId = await page.evaluate(() => state.rates[0].id);
+  await page.locator('#loadPublishedRatesButton').click();
+  await expect.poll(() => page.evaluate(() => state.rates[0].id)).not.toBe(localRateId);
+  await expect.poll(() => page.evaluate(() => state.rates.map(({ baseKg, baseRate, perKgRate }) => ({ baseKg, baseRate, perKgRate })))).toEqual([regression.card]);
+  await page.locator('button[data-target="entry"]').click();
+  for (const row of regression.lines) {
+    await page.locator('#shipmentList [data-field="weight"]').fill(String(row.weight));
+    await expect(page.locator('.amount-pill')).toHaveText(`Rs ${row.rupees.toFixed(2)}`);
+    await expect(page.locator('#summaryGross')).toHaveText(`Rs ${row.rupees.toFixed(2)}`);
+    const result = await page.evaluate(async () => {
+      const response = await window.CourierAuth.apiFetch(`${API_BASE}/invoices/calculate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...invoicePayload('GENERATED'), requestId: crypto.randomUUID(), expectedVersion: 0 })
+      });
+      return { status: response.status, body: await response.json() };
+    });
+    expect(result.status).toBe(200);
+    expect(result.body.mismatches).toEqual([]);
+    expect(result.body.calculation.lines[0].amountPaise).toBe(row.paise);
+    expect(result.body.calculation.paise.fuel).toBe(0);
+    expect(result.body.calculation.paise.cgst + result.body.calculation.paise.sgst + result.body.calculation.paise.igst).toBe(0);
+  }
+  await page.locator('#shipmentList [data-field="weight"]').fill('5');
+  const original = await finalize(page);
+  expect(original.shipments[0].amount).toBe(85);
+  expect(original.shipments[0].amount).not.toBe(100);
+  expect(original.calculationSnapshot.lines[0].amountPaise).toBe(8500);
+  expect(original.calculationSnapshot.appliedRates[0].rate).toEqual(regression.card);
+  expect(original.snapshot.totals.gross).toBe(85);
+  // A later published price must not reprice the finalized record or its historical print.
+  await page.locator('button[data-target="rates"]').click();
+  await page.locator('#rateList [data-field="perKgRate"]').first().fill('99');
+  await publish(page);
+  await page.locator('button[data-target="history"]').click();
+  const history = page.locator('.history-card').filter({ hasText: original.invoiceNumber });
+  await history.getByRole('button', { name: 'Open', exact: true }).click();
+  await page.locator('#printButton').click();
+  await expect.poll(() => page.evaluate(() => window.printCalls)).toBe(2);
+  expect(await page.evaluate(() => window.printedText)).toContain('85.00');
+  expect(await page.evaluate(async (id) => (await (await window.CourierAuth.apiFetch(`${API_BASE}/invoices/${id}`)).json()).data, original._id)).toEqual(original);
+});
+
 test('A: multiple destinations have explicit line amounts and a verified invoice total', async ({ page }) => {
   await page.locator('#addShipmentButton').click();
   const row = page.locator('.shipment-card').last();

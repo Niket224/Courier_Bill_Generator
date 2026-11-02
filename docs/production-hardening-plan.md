@@ -1,5 +1,13 @@
 # Production hardening plan for one operator
 
+Phase 7 local acceptance is documented in [the final audit](final-production-acceptance.md),
+[readiness checklist](release-readiness-checklist.md) and [NO-GO decision](production-go-no-go.md).
+Confirmed local gaps were corrected without changing the billing formula or issued
+financial records. No production action, live paid integration, scheduler activation,
+secret rotation or remote CI trigger occurred. The next work is an explicitly
+authorized representative staging/business/printing acceptance process; do not
+infer production readiness from local tests or from the existence of these documents.
+
 Phase 6 adds CI configuration, meaningful health/readiness, graceful runtime
 lifecycle, privacy-safe operational events/counters, guarded backup-job and monitor
 scripts, and a measured local recovery drill. See [deployment](deployment.md),

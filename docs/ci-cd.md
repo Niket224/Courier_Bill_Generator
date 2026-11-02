@@ -1,5 +1,15 @@
 # CI and release gates
 
+Phase 7 adds Poppler-based inspection of eight synthetic invoice PDFs and enforces
+coverage floors of 90% lines, 80% branches and 85% functions over the existing loaded
+backend/shared-module scope. A negative fixture proves low coverage fails even if
+its assertions pass. Root installation sets MONGOMS_DISABLE_POSTINSTALL=1 only for
+`npm ci`, avoiding an unpinned automatic MongoDB download; test harnesses continue
+to request their pinned MongoDB 7.0.24 and strip inherited overrides.
+Hosted execution for the uncommitted acceptance diff remains NOT VERIFIED.
+See [final acceptance](final-production-acceptance.md) and
+[operator push/PR instructions](release-readiness-checklist.md).
+
 The [GitHub workflow](../.github/workflows/ci.yml) runs on PRs to main, pushes to main/fix/production-hardening, and manual dispatch. It contains **no deployment job**. Its file uses JSON syntax, which is a valid YAML subset, so the repository can parse it without adding a YAML dependency.
 
 Checks: locked root/server install, JavaScript syntax, workflow safety policy, source secret/private-artifact scan, all unit/integration/browser regressions, Node coverage, both dependency audits at moderate severity, and the disposable operations/recovery drill. The workflow uses Ubuntu 24.04 and Node 24, installs Chromium and OS dependencies, and has a 30-minute timeout. No linter exists; syntax checking is not mislabeled linting.

@@ -19,3 +19,6 @@ outputs/
 *.backup-key
 backups/
 recovery-data/
+# Generated PDF acceptance artifacts and raster inspection scratch files.
+output/pdf/
+tmp/pdfs/

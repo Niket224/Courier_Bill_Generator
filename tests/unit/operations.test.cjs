@@ -103,8 +103,8 @@ test('service-worker rollout deletes only obsolete app caches and never unrelate
   const vm = require('node:vm'), events = {}, removed = []; let activation;
   vm.runInNewContext(await fs.readFile(path.resolve('mobile-bill-app/sw.js'), 'utf8'), {
     URL, self: { clients: { claim: async () => {} }, location: { origin: 'https://billing.example.test' }, addEventListener: (event, callback) => { events[event] = callback; } },
-    caches: { keys: async () => ['courier-bill-app-v11', 'courier-bill-app-v12', 'other-application-data'], delete: async name => removed.push(name) }
+    caches: { keys: async () => ['courier-bill-app-v12', 'courier-bill-app-v13', 'other-application-data'], delete: async name => removed.push(name) }
   });
   events.activate({ waitUntil: promise => { activation = promise; } }); await activation;
-  assert.deepEqual(removed, ['courier-bill-app-v11']);
+  assert.deepEqual(removed, ['courier-bill-app-v12']);
 });

@@ -4,6 +4,7 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
 const fixture = require('../fixtures/bill.json');
+const { basePlusExtraRegression: regression } = require('../fixtures/billing-golden.json');
 
 function browserLogic() {
   const context = vm.createContext({
@@ -24,6 +25,14 @@ test('base charge, excess kilograms, pieces, and normalized rate lookup', () => 
   assert.equal(run('calculateShipment(state.shipments[0]).amount'), 45);
   assert.equal(run('calculateShipment({...state.shipments[0], destination: " patna ", weight: 4.5, pcs: 2}).amount'), 135);
 });
+for (const row of regression.lines) test(`actual frontend preview: ${row.weight}kg has Rs${row.rupees} shipping before fuel/GST`, () => {
+  const run = browserLogic();
+  run(`Object.assign(state.rates[0], ${JSON.stringify(regression.card)})`);
+  const result = run(`calculateShipment({...state.shipments[0], weight: ${row.weight}, pcs: 1, manualAmount: ''})`);
+  assert.deepEqual(result, { amount: row.rupees, status: 'ok' });
+  if (row.weight === 5) assert.notEqual(result.amount, 100);
+});
+
 test('manual amount and missing-rate status', () => {
   const run = browserLogic();
   assert.deepEqual(run('calculateShipment({...state.shipments[0], manualAmount: "25.50"})'), { amount: 25.5, status: 'manual' });

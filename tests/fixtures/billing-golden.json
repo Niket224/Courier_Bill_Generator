@@ -1,5 +1,15 @@
 {
   "card": { "baseKg": 3, "baseRate": 45, "perKgRate": 15 },
+  "basePlusExtraRegression": {
+    "card": { "baseKg": 3, "baseRate": 45, "perKgRate": 20 },
+    "lines": [
+      { "weight": 1, "pcs": 1, "rupees": 45, "paise": 4500 },
+      { "weight": 3, "pcs": 1, "rupees": 45, "paise": 4500 },
+      { "weight": 4, "pcs": 1, "rupees": 65, "paise": 6500 },
+      { "weight": 5, "pcs": 1, "rupees": 85, "paise": 8500 },
+      { "weight": 6, "pcs": 1, "rupees": 105, "paise": 10500 }
+    ]
+  },
   "lines": [
     { "name": "below base", "weight": 1, "pcs": 1, "paise": 4500 },
     { "name": "at base", "weight": 3, "pcs": 1, "paise": 4500 },

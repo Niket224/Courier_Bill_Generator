@@ -49,7 +49,7 @@ const literalSearch = (value) => String(value).trim().replace(/[.*+?^${}()|[\]\\
 /**
  * @route   GET /api/invoices
  * @desc    Get paginated list of past invoices
- * @access  Public
+ * @access  Authenticated operator
  */
 router.get('/', async (req, res, next) => {
   try {
@@ -93,7 +93,7 @@ router.get('/', async (req, res, next) => {
 /**
  * @route   GET /api/invoices/search
  * @desc    Filter invoices by C/NO (AWB), shipperCode, invoice number, or date range
- * @access  Public
+ * @access  Authenticated operator
  */
 router.get('/search', async (req, res, next) => {
   try {
@@ -103,6 +103,7 @@ router.get('/search', async (req, res, next) => {
     const skip = (page - 1) * limit;
 
     const andConditions = [];
+    if (req.query.status) andConditions.push({ status: req.query.status.toUpperCase() });
     const orTextConditions = [];
 
     // Unified query term or individual field queries combined with $or
@@ -191,7 +192,7 @@ router.get('/search', async (req, res, next) => {
 /**
  * @route   GET /api/invoices/:id
  * @desc    Get single invoice by ID or invoiceNumber
- * @access  Public
+ * @access  Authenticated operator
  */
 router.get('/:id', async (req, res, next) => {
   try {

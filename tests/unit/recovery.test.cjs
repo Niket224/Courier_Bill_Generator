@@ -47,6 +47,9 @@ test('browser legacy import remains compatible and versioned export contains all
   const imported = Data.importBackup(JSON.stringify(fixture)); assert.equal(imported.legacy, true);
   const archive = { 'courier-bill-archive-test': JSON.stringify({ createdAt: new Date().toISOString(), state: fixture }) };
   const exported = Data.exportBackup(fixture, archive); assert.equal(exported.version, 1); assert.deepEqual(Data.importBackup(JSON.stringify(exported)).records, archive);
+  const legacyGif = structuredClone(fixture); legacyGif.bill.logoSrc = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+  assert.equal(Data.importBackup(JSON.stringify(legacyGif)).state.bill.logoSrc, legacyGif.bill.logoSrc);
+  assert.equal(Data.exportBackup(legacyGif, {}).state.bill.logoSrc, legacyGif.bill.logoSrc);
 });
 test('malformed JSON, missing browser fields, unsupported versions and invalid amounts are rejected', () => {
   for (const text of ['{', '{}', JSON.stringify({ format: 'courier-browser-backup', version: 99 }), JSON.stringify({ ...fixture, shipments: [{ ...fixture.shipments[0], weight: -1 }] })]) assert.throws(() => Data.importBackup(text));

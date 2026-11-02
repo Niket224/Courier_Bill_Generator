@@ -1,12 +1,12 @@
-const CACHE_NAME = "courier-bill-app-v12";
+const CACHE_NAME = "courier-bill-app-v13";
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=5",
+  "./styles.css?v=6",
   "./billing.js?v=1",
-  "./browser-data.js?v=1",
+  "./browser-data.js?v=2",
   "./draft-vault.js?v=1",
-  "./app.js?v=10",
+  "./app.js?v=11",
   "./rate-card.js?v=1",
   "./rate-review.js?v=2",
   "./auth.js?v=5",

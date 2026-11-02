@@ -8,6 +8,16 @@ const golden = require('../fixtures/billing-golden.json');
 for (const row of golden.lines) test(`golden shipment: ${row.name}`, () => {
   assert.equal(Billing.shipment(row, golden.card).amountPaise, row.paise);
 });
+for (const row of golden.basePlusExtraRegression.lines) test(`base 3kg/Rs45 plus Rs20/kg: ${row.weight}kg ships for Rs${row.rupees} before fuel/GST`, () => {
+  const result = Billing.shipment(row, golden.basePlusExtraRegression.card);
+  assert.equal(result.amountPaise, row.paise);
+  assert.equal(result.amount, row.rupees);
+  if (row.weight === 5) {
+    assert.equal(result.amountPaise, 8500);
+    assert.notEqual(result.amountPaise, 10000, 'The base charge is Rs45, not baseKg * perKgRate.');
+  }
+});
+
 test('golden invoice has independently specified gross, fuel, split taxes and words', () => {
   const input = { ...golden.invoice, shipments: golden.invoice.shipments.map((row) => ({ ...row, rate: golden.card })) };
   const result = Billing.invoice(input);

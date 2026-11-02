@@ -1,5 +1,12 @@
 # Coordinated rollback runbook
 
+Phase 7 closes confirmed path/filter/escaping/privacy gaps. A rollback to an earlier
+build may reintroduce those defects even when data formats remain compatible; it
+must not be declared safe solely because the page loads. Preserve maintenance
+mode, keys, pending requests and the original database while a reviewed compatible
+release or fix is accepted. SW v13 replaces obsolete Courier caches without clearing
+browser vaults. No actual hosted version switch was tested or authorized here.
+
 No production rollout or rollback was performed. Local tests prove request/version guards, service-worker cache handling, graceful restart, idempotent persistence and restoration to fresh databases; they do not certify arbitrary historical release compatibility.
 
 Stop rollout for readiness failure, login/CSRF/cookie regression, invoice reconciliation failures, unconfirmed backup, unreadable browser vaults or mixed frontend/backend protocol. Preserve drafts and request IDs. Do not run a schema downgrade, delete rate versions, clear browser storage or restore over an existing database to make the UI work.
