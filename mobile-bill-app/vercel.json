@@ -1,0 +1,8 @@
+﻿{
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://courier-bill-generator.onrender.com/api/$1"
+    }
+  ]
+}
