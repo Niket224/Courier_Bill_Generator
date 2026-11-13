@@ -12,10 +12,10 @@ function securityConfig(env) {
   }
   const age = env.SESSION_TTL_MINUTES ?? '480';
   if (!/^\d+$/.test(age) || Number(age) < 5 || Number(age) > 1440) errors.push('SESSION_TTL_MINUTES must be an integer from 5 to 1440.');
-  if (!['false', 'loopback'].includes(env.TRUST_PROXY ?? 'false')) errors.push('TRUST_PROXY must be false or loopback.');
+  if (!['false', 'loopback', 'render'].includes(env.TRUST_PROXY ?? 'false')) errors.push('TRUST_PROXY must be false, loopback, or render.');
   if (errors.length) throw new Error(errors.join('\n- '));
   return { adminUsername: env.ADMIN_USERNAME, adminPasswordHash: env.ADMIN_PASSWORD_HASH,
     sessionSecret: env.SESSION_SECRET, browserDraftKey: env.BROWSER_DRAFT_KEY, sessionMaxAge: Number(age) * 60000,
-    trustProxy: env.TRUST_PROXY === 'loopback' ? 'loopback' : false };
+    trustProxy: env.TRUST_PROXY === 'loopback' ? 'loopback' : env.TRUST_PROXY === 'render' ? 1 : false };
 }
 module.exports = { securityConfig };

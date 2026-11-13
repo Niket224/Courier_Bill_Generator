@@ -218,6 +218,47 @@ test('security headers, no-store, and production Secure cookies', async () => {
   assert.match(secure.headers['set-cookie'][0], /; HttpOnly/);
   assert.ok(!secure.headers['set-cookie'][0].includes('Domain='));
 });
+
+test('Render proxy mode trusts one hop for HTTPS cookies; false ignores spoofed forwarded proto', async () => {
+  const render = fresh({ nodeEnv: 'production', trustProxy: 1 });
+  const secure = await request(render).get('/api/auth/csrf').set('X-Forwarded-Proto', 'https').expect(200);
+  const cookie = secure.headers['set-cookie'][0];
+  assert.match(cookie, /^__Host-courier\.sid=/);
+  assert.match(cookie, /; Secure/);
+  assert.match(cookie, /; HttpOnly/);
+  assert.match(cookie, /; SameSite=Lax/);
+  assert.match(cookie, /; Path=\//i);
+  assert.ok(!cookie.includes('Domain='));
+
+  const untrusted = fresh({ nodeEnv: 'production', trustProxy: false });
+  const spoofed = await request(untrusted).get('/api/auth/csrf').set('X-Forwarded-Proto', 'https').expect(200);
+  assert.equal(spoofed.headers['set-cookie'], undefined);
+});
+
+test('Render proxy mode exposes Express X-Forwarded-For attribution; ingress spoof handling requires staging verification', async () => {
+  const target = fresh({ trustProxy: 1 });
+  await request(target).get('/api/auth/csrf').set('X-Forwarded-For', '198.51.100.10').expect(200);
+  // Direct Supertest requests have a loopback socket peer. With one-hop trust, the
+  // supplied XFF value becomes req.ip and therefore an express-rate-limit key.
+  for (let i = 0; i < 59; i++) {
+    await request(target).get('/api/auth/csrf').set('X-Forwarded-For', '198.51.100.10').expect(200);
+  }
+  await request(target).get('/api/auth/csrf').set('X-Forwarded-For', '198.51.100.10').expect(429);
+  await request(target).get('/api/auth/csrf').set('X-Forwarded-For', '198.51.100.11').expect(200);
+  // Extra XFF elements are parsed as a chain; a single trusted hop selects the
+  // rightmost address after the direct socket. Invalid entries are ignored by proxy-addr.
+  await request(target).get('/api/auth/csrf').set('X-Forwarded-For', '198.51.100.10, 198.51.100.12').expect(200);
+  await request(target).get('/api/auth/csrf').set('X-Forwarded-For', 'not-an-ip').expect(200);
+});
+
+test('direct requests with proxy trust disabled cannot split IP rate-limit buckets using X-Forwarded-For', async () => {
+  const target = fresh({ trustProxy: false });
+  for (let i = 0; i < 60; i++) {
+    await request(target).get('/api/auth/csrf').set('X-Forwarded-For', '198.51.100.20').expect(200);
+  }
+  // Different spoofed values still share the direct socket's rate-limit bucket.
+  await request(target).get('/api/auth/csrf').set('X-Forwarded-For', '203.0.113.99').expect(429);
+});
 test('production API errors do not leak secrets or stack traces', async () => {
   const { client } = await signIn();
   const find = Rate.find;

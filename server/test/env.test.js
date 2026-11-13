@@ -15,6 +15,17 @@ test('defaults and missing optional Gemini configuration', () => {
   assert.equal(result.nodeEnv, 'development');
   assert.deepEqual(result.allowedOrigins, []);
   assert.match(result.warnings[0], /GEMINI_API_KEY.*missing/);
+  assert.equal(result.trustProxy, false);
+});
+
+test('proxy trust modes are explicit and render trusts exactly one hop', () => {
+  assert.equal(validateEnv({ ...valid, TRUST_PROXY: 'false' }).trustProxy, false);
+  assert.equal(validateEnv({ ...valid, TRUST_PROXY: 'loopback' }).trustProxy, 'loopback');
+  assert.equal(validateEnv({ ...valid, TRUST_PROXY: 'render' }).trustProxy, 1);
+  for (const TRUST_PROXY of ['true', '1', '*', 'all', '10.0.0.0/8', '']) {
+    assert.throws(() => validateEnv({ ...valid, TRUST_PROXY }), /TRUST_PROXY must be false, loopback, or render/);
+  }
+  assert.equal(validateEnv({ ...valid, BIND_HOST: '0.0.0.0' }).bindHost, '0.0.0.0');
 });
 
 test('Gemini configuration enforces bounded attempts and model identifier syntax', () => {
