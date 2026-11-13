@@ -1,8 +1,9 @@
 ﻿{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "https://courier-bill-generator.onrender.com/api/$1"
+      "source": "/api/:path*",
+      "destination": "https://courier-bill-generator.onrender.com/api/:path*"
     }
   ]
 }
